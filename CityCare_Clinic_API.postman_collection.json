@@ -1,0 +1,628 @@
+{
+  "info": {
+    "_postman_id": "citycare-clinic-api-v1",
+    "name": "CityCare Clinic API",
+    "description": "Complete Postman collection for the CityCare Clinic Appointment Booking System.\n\nBase URL: http://localhost:8001/api/v1\n\n**How to use:**\n1. Run POST /signup to create an account\n2. Run POST /login — the `access_token` is automatically saved to the `token` collection variable\n3. All protected requests use that token automatically\n\n**Doctor Account:**\nSign up with the email set in `DOCTOR_EMAIL` in your `.env` file (default: `dr.meera@citycare.com`) to get the doctor role.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8001/api/v1",
+      "type": "string",
+      "description": "Base URL of the CityCare Clinic API"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "JWT Bearer token. Automatically set after POST /login."
+    },
+    {
+      "key": "appointment_id",
+      "value": "",
+      "type": "string",
+      "description": "Appointment ObjectId. Manually set after POST /book."
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "description": "Public endpoints for user registration and login. No token required.",
+      "item": [
+        {
+          "name": "POST /signup — Register Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rahul Sharma\",\n  \"email\": \"rahul.sharma@email.com\",\n  \"password\": \"secure123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/signup",
+              "host": ["{{base_url}}"],
+              "path": ["signup"]
+            },
+            "description": "Register a new patient account.\n\n- Any email other than the DOCTOR_EMAIL gets the 'patient' role\n- Returns user_id, name, email, role\n- Does NOT return a token — use POST /login after registering\n\n**Status Codes:**\n- 201 Created — Account created\n- 409 Conflict — Email already registered\n- 422 Unprocessable — Validation error"
+          },
+          "response": [
+            {
+              "name": "201 — Patient Registered",
+              "status": "Created",
+              "code": 201,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"user_id\": \"64f1a2b3c4d5e6f7a8b9c0d1\",\n  \"name\": \"Rahul Sharma\",\n  \"email\": \"rahul.sharma@email.com\",\n  \"role\": \"patient\",\n  \"message\": \"Account created successfully. You can now log in.\"\n}",
+              "originalRequest": {
+                "method": "POST",
+                "url": {"raw": "{{base_url}}/signup"}
+              }
+            },
+            {
+              "name": "409 — Email Already Registered",
+              "status": "Conflict",
+              "code": 409,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"detail\": \"An account with this email address already exists.\"\n}",
+              "originalRequest": {
+                "method": "POST",
+                "url": {"raw": "{{base_url}}/signup"}
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /signup — Register Doctor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dr. Meera Kulkarni\",\n  \"email\": \"dr.meera@citycare.com\",\n  \"password\": \"doctor123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/signup",
+              "host": ["{{base_url}}"],
+              "path": ["signup"]
+            },
+            "description": "Register the doctor account.\n\nThe email must match DOCTOR_EMAIL in your .env file.\nDefault: dr.meera@citycare.com\n\nThis account will have role='doctor' and can access /doctor/schedule and /doctor/stats."
+          },
+          "response": [
+            {
+              "name": "201 — Doctor Registered",
+              "status": "Created",
+              "code": 201,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"user_id\": \"64f1a2b3c4d5e6f7a8b9c0d2\",\n  \"name\": \"Dr. Meera Kulkarni\",\n  \"email\": \"dr.meera@citycare.com\",\n  \"role\": \"doctor\",\n  \"message\": \"Account created successfully. You can now log in.\"\n}",
+              "originalRequest": {
+                "method": "POST",
+                "url": {"raw": "{{base_url}}/signup"}
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /login — Patient Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Automatically save the token to the collection variable",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('token', body.access_token);",
+                  "    console.log('Token saved:', body.access_token.substring(0, 30) + '...');",
+                  "    console.log('Role:', body.role);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"rahul.sharma@email.com\",\n  \"password\": \"secure123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/login",
+              "host": ["{{base_url}}"],
+              "path": ["login"]
+            },
+            "description": "Authenticate and receive a JWT Bearer token.\n\nThe test script **automatically saves** the `access_token` to the `token` collection variable. All protected requests use `{{token}}` automatically.\n\n**Status Codes:**\n- 200 OK — Token returned\n- 401 Unauthorized — Wrong email or password"
+          },
+          "response": [
+            {
+              "name": "200 — Login Successful",
+              "status": "OK",
+              "code": 200,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"token_type\": \"bearer\",\n  \"role\": \"patient\",\n  \"name\": \"Rahul Sharma\"\n}",
+              "originalRequest": {
+                "method": "POST",
+                "url": {"raw": "{{base_url}}/login"}
+              }
+            },
+            {
+              "name": "401 — Wrong Credentials",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"detail\": \"Invalid email address or password.\"\n}",
+              "originalRequest": {
+                "method": "POST",
+                "url": {"raw": "{{base_url}}/login"}
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /login — Doctor Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('token', body.access_token);",
+                  "    console.log('Doctor token saved. Role:', body.role);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"dr.meera@citycare.com\",\n  \"password\": \"doctor123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/login",
+              "host": ["{{base_url}}"],
+              "path": ["login"]
+            },
+            "description": "Login as the doctor to get a token with role='doctor'.\n\nRequired to access /doctor/schedule and /doctor/stats.\nToken is auto-saved to {{token}} collection variable."
+          },
+          "response": [
+            {
+              "name": "200 — Doctor Login Successful",
+              "status": "OK",
+              "code": 200,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"token_type\": \"bearer\",\n  \"role\": \"doctor\",\n  \"name\": \"Dr. Meera Kulkarni\"\n}",
+              "originalRequest": {
+                "method": "POST",
+                "url": {"raw": "{{base_url}}/login"}
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Clinic (Public)",
+      "description": "Publicly accessible clinic information endpoints. No token required.",
+      "item": [
+        {
+          "name": "GET /doctor-info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/doctor-info",
+              "host": ["{{base_url}}"],
+              "path": ["doctor-info"]
+            },
+            "description": "Returns static clinic and doctor profile information.\n\nNo authentication required.\n\n**Returns:**\n- Doctor name, specialization\n- Morning and evening consultation hours\n- Consultation fee\n- Address and phone number\n- Languages spoken"
+          },
+          "response": [
+            {
+              "name": "200 — Doctor Info",
+              "status": "OK",
+              "code": 200,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"doctor_name\": \"Dr. Meera Kulkarni\",\n  \"specialization\": \"General Physician\",\n  \"clinic_name\": \"CityCare Clinic\",\n  \"consultation_fee\": \"₹300\",\n  \"morning_hours\": \"10:00 AM – 1:00 PM\",\n  \"evening_hours\": \"5:00 PM – 8:00 PM\",\n  \"slot_duration_minutes\": 30,\n  \"total_slots_per_day\": 12,\n  \"languages_spoken\": [\"English\", \"Hindi\", \"Marathi\"],\n  \"address\": \"12, MG Road, Pune, Maharashtra – 411001\",\n  \"phone\": \"+91-20-1234-5678\"\n}",
+              "originalRequest": {
+                "method": "GET",
+                "url": {"raw": "{{base_url}}/doctor-info"}
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /free-slots?date=today",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/free-slots?date=2026-08-07",
+              "host": ["{{base_url}}"],
+              "path": ["free-slots"],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-08-07",
+                  "description": "Date in YYYY-MM-DD format. Must be today to +7 days."
+                }
+              ]
+            },
+            "description": "Returns all available (unbooked) time slots for the given date.\n\nNo authentication required.\n\n**Clinic Schedule (12 total slots):**\n- Morning: 10:00, 10:30, 11:00, 11:30, 12:00, 12:30\n- Evening: 17:00, 17:30, 18:00, 18:30, 19:00, 19:30\n\n**Validation:**\n- Date must be today or up to 7 days in the future\n- Past dates return 400"
+          },
+          "response": [
+            {
+              "name": "200 — Free Slots (Empty Day)",
+              "status": "OK",
+              "code": 200,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"date\": \"2026-08-07\",\n  \"available_slots\": [\n    \"10:00\", \"10:30\", \"11:00\", \"11:30\", \"12:00\", \"12:30\",\n    \"17:00\", \"17:30\", \"18:00\", \"18:30\", \"19:00\", \"19:30\"\n  ],\n  \"total_available\": 12\n}",
+              "originalRequest": {
+                "method": "GET",
+                "url": {"raw": "{{base_url}}/free-slots?date=2026-08-07"}
+              }
+            },
+            {
+              "name": "400 — Past Date",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"detail\": \"Cannot query slots for a past date.\"\n}",
+              "originalRequest": {
+                "method": "GET",
+                "url": {"raw": "{{base_url}}/free-slots?date=2020-01-01"}
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Appointments (Patient)",
+      "description": "Protected endpoints for patient appointment management.\n\nAll requests require a valid Bearer token in the Authorization header.\nLogin as a patient first and the token is set automatically.",
+      "item": [
+        {
+          "name": "POST /book — Book Appointment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Auto-save appointment_id for cancel test",
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('appointment_id', body.appointment_id);",
+                  "    console.log('Appointment ID saved:', body.appointment_id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2026-08-07\",\n  \"slot\": \"10:00\",\n  \"reason\": \"I have been experiencing persistent fever and body pain for 3 days.\",\n  \"temperature\": 99.5,\n  \"symptoms\": [\"fever\", \"bodyache\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/book",
+              "host": ["{{base_url}}"],
+              "path": ["book"]
+            },
+            "description": "Book an appointment slot. Passes through 4 validation gates:\n\n**Gate 1 — Auth:** Valid JWT required\n**Gate 2 — Data shape (schema):**\n- `date`: Valid YYYY-MM-DD\n- `reason`: ≥ 10 characters\n- `temperature`: 95.0°F – 110.0°F\n- `symptoms`: At least one from: fever, cough, cold, bodyache, headache, other\n\n**Gate 3 — Business logic:**\n- Date: today to +7 days\n- Slot: must be on clinic menu\n\n**Gate 4 — Database:**\n- Unique (date, slot) constraint — 409 on clash\n\n**Identity comes from JWT, never the request body.**"
+          },
+          "response": [
+            {
+              "name": "201 — Appointment Booked",
+              "status": "Created",
+              "code": 201,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"appointment_id\": \"64f1a2b3c4d5e6f7a8b9c0d3\",\n  \"patient_name\": \"Rahul Sharma\",\n  \"date\": \"2026-08-07\",\n  \"slot\": \"10:00\",\n  \"reason\": \"I have been experiencing persistent fever and body pain for 3 days.\",\n  \"temperature\": 99.5,\n  \"symptoms\": [\"fever\", \"bodyache\"],\n  \"is_cancelled\": false,\n  \"created_at\": \"2026-08-06T16:30:00+00:00\",\n  \"message\": \"Appointment booked successfully.\"\n}",
+              "originalRequest": {
+                "method": "POST",
+                "url": {"raw": "{{base_url}}/book"}
+              }
+            },
+            {
+              "name": "409 — Slot Already Booked (Gate 4)",
+              "status": "Conflict",
+              "code": 409,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"detail\": \"The slot '10:00' on 2026-08-07 is already booked. Please choose a different slot.\"\n}",
+              "originalRequest": {
+                "method": "POST",
+                "url": {"raw": "{{base_url}}/book"}
+              }
+            },
+            {
+              "name": "400 — Invalid Slot (Gate 3)",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"detail\": \"'15:00' is not a valid clinic slot. Use GET /free-slots to see available times.\"\n}",
+              "originalRequest": {
+                "method": "POST",
+                "url": {"raw": "{{base_url}}/book"}
+              }
+            },
+            {
+              "name": "422 — Validation Error (Gate 2)",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"detail\": [\n    {\n      \"type\": \"string_too_short\",\n      \"loc\": [\"body\", \"reason\"],\n      \"msg\": \"String should have at least 10 characters\"\n    }\n  ]\n}",
+              "originalRequest": {
+                "method": "POST",
+                "url": {"raw": "{{base_url}}/book"}
+              }
+            },
+            {
+              "name": "401 — No Token (Gate 1)",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}",
+              "originalRequest": {
+                "method": "POST",
+                "url": {"raw": "{{base_url}}/book"}
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /my-appointments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/my-appointments",
+              "host": ["{{base_url}}"],
+              "path": ["my-appointments"]
+            },
+            "description": "Retrieve all appointments for the currently authenticated patient.\n\n- Returns both active and cancelled appointments\n- Ordered newest first (by created_at desc)\n- Returns empty list [] if no appointments exist\n- Identity comes from JWT — a patient can only see their own appointments"
+          },
+          "response": [
+            {
+              "name": "200 — Patient Appointments",
+              "status": "OK",
+              "code": 200,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "[\n  {\n    \"appointment_id\": \"64f1a2b3c4d5e6f7a8b9c0d3\",\n    \"patient_name\": \"Rahul Sharma\",\n    \"date\": \"2026-08-07\",\n    \"slot\": \"10:00\",\n    \"reason\": \"I have been experiencing persistent fever and body pain for 3 days.\",\n    \"temperature\": 99.5,\n    \"symptoms\": [\"fever\", \"bodyache\"],\n    \"is_cancelled\": false,\n    \"created_at\": \"2026-08-06T16:30:00+00:00\",\n    \"message\": \"\"\n  }\n]",
+              "originalRequest": {
+                "method": "GET",
+                "url": {"raw": "{{base_url}}/my-appointments"}
+              }
+            },
+            {
+              "name": "200 — No Appointments",
+              "status": "OK",
+              "code": 200,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "[]",
+              "originalRequest": {
+                "method": "GET",
+                "url": {"raw": "{{base_url}}/my-appointments"}
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /cancel/{appointment_id}",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cancel/{{appointment_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["cancel", "{{appointment_id}}"]
+            },
+            "description": "Cancel a specific appointment belonging to the authenticated patient.\n\n**Soft-delete:** The record is NOT deleted from MongoDB. It is marked `is_cancelled=true`, which:\n- Frees the slot for other patients immediately\n- Preserves the audit trail for the doctor\n\nPatients can only cancel their **own** appointments — other patients' IDs return 404.\n\nThe `{{appointment_id}}` variable is auto-set by the POST /book test script."
+          },
+          "response": [
+            {
+              "name": "200 — Cancelled Successfully",
+              "status": "OK",
+              "code": 200,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"appointment_id\": \"64f1a2b3c4d5e6f7a8b9c0d3\",\n  \"message\": \"Appointment cancelled successfully. The slot is now available for others.\"\n}",
+              "originalRequest": {
+                "method": "DELETE",
+                "url": {"raw": "{{base_url}}/cancel/{{appointment_id}}"}
+              }
+            },
+            {
+              "name": "404 — Appointment Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"detail\": \"Appointment not found.\"\n}",
+              "originalRequest": {
+                "method": "DELETE",
+                "url": {"raw": "{{base_url}}/cancel/{{appointment_id}}"}
+              }
+            },
+            {
+              "name": "409 — Already Cancelled",
+              "status": "Conflict",
+              "code": 409,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"detail\": \"This appointment has already been cancelled.\"\n}",
+              "originalRequest": {
+                "method": "DELETE",
+                "url": {"raw": "{{base_url}}/cancel/{{appointment_id}}"}
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Doctor Dashboard (Doctor Only)",
+      "description": "Doctor-only endpoints. Requires a JWT token with role='doctor'.\n\nLogin with the doctor account first — patients receive 403 Forbidden.",
+      "item": [
+        {
+          "name": "GET /doctor/schedule?date=...",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/doctor/schedule?date=2026-08-07",
+              "host": ["{{base_url}}"],
+              "path": ["doctor", "schedule"],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-08-07",
+                  "description": "Date to view the schedule for (YYYY-MM-DD). Any valid date."
+                }
+              ]
+            },
+            "description": "Returns the full appointment schedule for the given date.\n\n**Doctor role required** — patients receive 403.\n\n- Shows all appointments (active + cancelled)\n- Ordered chronologically by slot time\n- Includes patient name, reason, temperature, symptoms for each entry"
+          },
+          "response": [
+            {
+              "name": "200 — Doctor Schedule",
+              "status": "OK",
+              "code": 200,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"date\": \"2026-08-07\",\n  \"total_appointments\": 2,\n  \"schedule\": [\n    {\n      \"appointment_id\": \"64f1a2b3c4d5e6f7a8b9c0d3\",\n      \"slot\": \"10:00\",\n      \"patient_name\": \"Rahul Sharma\",\n      \"reason\": \"I have been experiencing persistent fever and body pain for 3 days.\",\n      \"temperature\": 99.5,\n      \"symptoms\": [\"fever\", \"bodyache\"],\n      \"is_cancelled\": false\n    },\n    {\n      \"appointment_id\": \"64f1a2b3c4d5e6f7a8b9c0d4\",\n      \"slot\": \"17:00\",\n      \"patient_name\": \"Priya Mehta\",\n      \"reason\": \"Recurring headache and cold symptoms since last week.\",\n      \"temperature\": 97.2,\n      \"symptoms\": [\"headache\", \"cold\"],\n      \"is_cancelled\": false\n    }\n  ]\n}",
+              "originalRequest": {
+                "method": "GET",
+                "url": {"raw": "{{base_url}}/doctor/schedule?date=2026-08-07"}
+              }
+            },
+            {
+              "name": "403 — Patient Trying to Access",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"detail\": \"Access denied. This endpoint is restricted to doctors.\"\n}",
+              "originalRequest": {
+                "method": "GET",
+                "url": {"raw": "{{base_url}}/doctor/schedule?date=2026-08-07"}
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /doctor/stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/doctor/stats",
+              "host": ["{{base_url}}"],
+              "path": ["doctor", "stats"]
+            },
+            "description": "Returns high-level clinic statistics for the doctor dashboard.\n\n**Doctor role required** — patients receive 403.\n\n**Returns:**\n- `total_registered_patients` — all accounts with role='patient'\n- `todays_visit_count` — active (non-cancelled) appointments today\n- `upcoming_visit_count` — active appointments after today"
+          },
+          "response": [
+            {
+              "name": "200 — Doctor Stats",
+              "status": "OK",
+              "code": 200,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"total_registered_patients\": 15,\n  \"todays_visit_count\": 3,\n  \"upcoming_visit_count\": 8\n}",
+              "originalRequest": {
+                "method": "GET",
+                "url": {"raw": "{{base_url}}/doctor/stats"}
+              }
+            },
+            {
+              "name": "403 — Patient Trying to Access",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [{"key": "Content-Type", "value": "application/json"}],
+              "body": "{\n  \"detail\": \"Access denied. This endpoint is restricted to doctors.\"\n}",
+              "originalRequest": {
+                "method": "GET",
+                "url": {"raw": "{{base_url}}/doctor/stats"}
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
