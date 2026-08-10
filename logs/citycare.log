@@ -23690,3 +23690,117 @@ google.genai.errors.ClientError: 404 NOT_FOUND. {'error': {'code': 404, 'message
 [2026-08-10T02:42:52Z] [WARNING] [core.controllers.auth_controller] — Login failed for email: dr.meera.kulkarni@citycare.com
 [2026-08-10T02:50:07Z] [DEBUG] [core.cruds.hospital_crud] — All hospitals fetched: 4 records
 [2026-08-10T02:50:07Z] [DEBUG] [core.cruds.hospital_crud] — All hospitals fetched: 4 records
+[2026-08-10T05:59:15Z] [INFO] [main] — CityCare Clinic API starting up...
+[2026-08-10T05:59:15Z] [INFO] [core.database.database] — Connecting to MongoDB at: mongodb://localhost:27017 / citycare_clinic
+[2026-08-10T05:59:15Z] [INFO] [core.database.database] — Database connection established successfully
+[2026-08-10T05:59:15Z] [DEBUG] [core.cruds.user_crud] — User lookup by email 'dr.meera@citycare.com' — found: True
+[2026-08-10T05:59:15Z] [DEBUG] [core.database.seed] — Doctor account already present: dr.meera@citycare.com
+[2026-08-10T05:59:15Z] [DEBUG] [core.cruds.user_crud] — User lookup by email 'rahul.sharma@email.com' — found: True
+[2026-08-10T05:59:15Z] [DEBUG] [core.cruds.user_crud] — User lookup by email 'admin@citycare.com' — found: True
+[2026-08-10T05:59:15Z] [DEBUG] [core.database.seed] — Super Admin account already present: admin@citycare.com
+[2026-08-10T05:59:15Z] [INFO] [main] — CityCare Clinic API is ready to accept requests.
+[2026-08-10T06:00:49Z] [DEBUG] [core.cruds.user_crud] — User lookup by email 'chai@gmail.com' — found: True
+[2026-08-10T06:00:49Z] [DEBUG] [common.auth] — Access token created for subject: 6a79285945755dce0dd8c402
+[2026-08-10T06:00:49Z] [INFO] [core.controllers.auth_controller] — Login successful — email: chai@gmail.com
+[2026-08-10T06:00:50Z] [DEBUG] [core.cruds.user_crud] — Total registered patients count: 4
+[2026-08-10T06:00:50Z] [DEBUG] [core.cruds.appointment_crud] — Today's active appointment count for hospital '6a78a4b132590d8e095c8b13': 0
+[2026-08-10T06:00:50Z] [DEBUG] [core.cruds.appointment_crud] — Upcoming active appointment count for hospital '6a78a4b132590d8e095c8b13': 1
+[2026-08-10T06:00:50Z] [DEBUG] [core.cruds.doctor_profile_crud] — Profile lookup for user '6a79285945755dce0dd8c402' in hospital '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:00:50Z] [DEBUG] [core.cruds.appointment_crud] — Schedule for hospital '6a78a4b132590d8e095c8b13' on 2026-08-10 fetched: 1 appointments
+[2026-08-10T06:00:54Z] [DEBUG] [common.auth] — Authenticating request via Bearer token
+[2026-08-10T06:00:54Z] [DEBUG] [common.tenant_scope] — Hospital scope resolved — role: 'doctor', hospital_id: '6a78a4b132590d8e095c8b13', user: 'chai@gmail.com'
+[2026-08-10T06:01:00Z] [DEBUG] [common.auth] — Authenticating request via Bearer token
+[2026-08-10T06:01:00Z] [DEBUG] [common.tenant_scope] — Hospital scope resolved — role: 'doctor', hospital_id: '6a78a4b132590d8e095c8b13', user: 'chai@gmail.com'
+[2026-08-10T06:01:01Z] [DEBUG] [common.auth] — Authenticating request via Bearer token
+[2026-08-10T06:01:01Z] [DEBUG] [common.tenant_scope] — Hospital scope resolved — role: 'doctor', hospital_id: '6a78a4b132590d8e095c8b13', user: 'chai@gmail.com'
+[2026-08-10T06:01:01Z] [DEBUG] [chatbot.cruds.chat_crud] — Chat session created: 6a79691ddf3a839d1adaeb12 for user 6a79285945755dce0dd8c402
+[2026-08-10T06:01:01Z] [DEBUG] [chatbot.cruds.chat_crud] — Chat message created: 6a79691ddf3a839d1adaeb13 (role: user) in session 6a79691ddf3a839d1adaeb12
+[2026-08-10T06:01:02Z] [INFO] [chatbot.gemini_client] — Calling Gemini API model=gemini-3.6-flash turn=0
+[2026-08-10T06:01:05Z] [INFO] [chatbot.gemini_client] — Gemini requested tool execution: get_appointments({'doctor_id': '6a79285945755dce0dd8c402', 'start_date': '2026-08-10', 'end_date': '2026-08-10'})
+[2026-08-10T06:01:05Z] [DEBUG] [core.cruds.doctor_profile_crud] — Profile lookup for user '6a79285945755dce0dd8c402' in hospital '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:01:05Z] [DEBUG] [chatbot.tools] — Authorized doctor IDs computed for 6a79285945755dce0dd8c402 (doctor): {'6a79285945755dce0dd8c403', '6a79285945755dce0dd8c402'}
+[2026-08-10T06:01:05Z] [INFO] [chatbot.tools] — Intercepted tool call 'get_appointments' with args {'doctor_id': '6a79285945755dce0dd8c402', 'start_date': '2026-08-10', 'end_date': '2026-08-10'} for user role 'doctor'
+[2026-08-10T06:01:05Z] [INFO] [chatbot.gemini_client] — Calling Gemini API model=gemini-3.6-flash turn=1
+[2026-08-10T06:01:07Z] [INFO] [chatbot.gemini_client] — Gemini returned final response text.
+[2026-08-10T06:01:07Z] [DEBUG] [chatbot.cruds.chat_crud] — Chat message created: 6a796923df3a839d1adaeb14 (role: assistant) in session 6a79691ddf3a839d1adaeb12
+[2026-08-10T06:01:07Z] [DEBUG] [common.auth] — Authenticating request via Bearer token
+[2026-08-10T06:01:07Z] [DEBUG] [common.tenant_scope] — Hospital scope resolved — role: 'doctor', hospital_id: '6a78a4b132590d8e095c8b13', user: 'chai@gmail.com'
+[2026-08-10T06:01:14Z] [DEBUG] [common.auth] — Authenticating request via Bearer token
+[2026-08-10T06:01:14Z] [DEBUG] [common.tenant_scope] — Hospital scope resolved — role: 'doctor', hospital_id: '6a78a4b132590d8e095c8b13', user: 'chai@gmail.com'
+[2026-08-10T06:01:33Z] [DEBUG] [common.auth] — Authenticating request via Bearer token
+[2026-08-10T06:01:33Z] [DEBUG] [common.tenant_scope] — Hospital scope resolved — role: 'doctor', hospital_id: '6a78a4b132590d8e095c8b13', user: 'chai@gmail.com'
+[2026-08-10T06:01:33Z] [DEBUG] [chatbot.cruds.chat_crud] — Chat message created: 6a79693ddf3a839d1adaeb15 (role: user) in session 6a79691ddf3a839d1adaeb12
+[2026-08-10T06:01:34Z] [INFO] [chatbot.gemini_client] — Calling Gemini API model=gemini-3.6-flash turn=0
+[2026-08-10T06:01:36Z] [INFO] [chatbot.gemini_client] — Gemini requested tool execution: get_appointments({'end_date': '2026-08-10', 'start_date': '2026-08-10', 'doctor_id': '6a79285945755dce0dd8c402'})
+[2026-08-10T06:01:36Z] [DEBUG] [core.cruds.doctor_profile_crud] — Profile lookup for user '6a79285945755dce0dd8c402' in hospital '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:01:36Z] [DEBUG] [chatbot.tools] — Authorized doctor IDs computed for 6a79285945755dce0dd8c402 (doctor): {'6a79285945755dce0dd8c403', '6a79285945755dce0dd8c402'}
+[2026-08-10T06:01:36Z] [INFO] [chatbot.tools] — Intercepted tool call 'get_appointments' with args {'end_date': '2026-08-10', 'start_date': '2026-08-10', 'doctor_id': '6a79285945755dce0dd8c402'} for user role 'doctor'
+[2026-08-10T06:01:36Z] [INFO] [chatbot.gemini_client] — Calling Gemini API model=gemini-3.6-flash turn=1
+[2026-08-10T06:01:38Z] [INFO] [chatbot.gemini_client] — Gemini returned final response text.
+[2026-08-10T06:01:38Z] [DEBUG] [chatbot.cruds.chat_crud] — Chat message created: 6a796942df3a839d1adaeb16 (role: assistant) in session 6a79691ddf3a839d1adaeb12
+[2026-08-10T06:01:38Z] [DEBUG] [common.auth] — Authenticating request via Bearer token
+[2026-08-10T06:01:38Z] [DEBUG] [common.tenant_scope] — Hospital scope resolved — role: 'doctor', hospital_id: '6a78a4b132590d8e095c8b13', user: 'chai@gmail.com'
+[2026-08-10T06:02:19Z] [DEBUG] [core.cruds.appointment_crud] — Schedule for hospital '6a78a4b132590d8e095c8b13' on 2026-08-11 fetched: 1 appointments
+[2026-08-10T06:02:20Z] [DEBUG] [core.cruds.appointment_crud] — Schedule for hospital '6a78a4b132590d8e095c8b13' on 2026-08-10 fetched: 1 appointments
+[2026-08-10T06:02:21Z] [DEBUG] [core.cruds.appointment_crud] — Schedule for hospital '6a78a4b132590d8e095c8b13' on 2026-08-11 fetched: 1 appointments
+[2026-08-10T06:02:25Z] [DEBUG] [common.auth] — Authenticating request via Bearer token
+[2026-08-10T06:02:25Z] [DEBUG] [common.tenant_scope] — Hospital scope resolved — role: 'doctor', hospital_id: '6a78a4b132590d8e095c8b13', user: 'chai@gmail.com'
+[2026-08-10T06:02:34Z] [DEBUG] [common.auth] — Authenticating request via Bearer token
+[2026-08-10T06:02:34Z] [DEBUG] [common.tenant_scope] — Hospital scope resolved — role: 'doctor', hospital_id: '6a78a4b132590d8e095c8b13', user: 'chai@gmail.com'
+[2026-08-10T06:02:34Z] [DEBUG] [chatbot.cruds.chat_crud] — Chat message created: 6a79697adf3a839d1adaeb17 (role: user) in session 6a79691ddf3a839d1adaeb12
+[2026-08-10T06:02:35Z] [INFO] [chatbot.gemini_client] — Calling Gemini API model=gemini-3.6-flash turn=0
+[2026-08-10T06:02:37Z] [INFO] [chatbot.gemini_client] — Gemini requested tool execution: get_appointments({'doctor_id': '6a79285945755dce0dd8c402', 'end_date': '2026-08-11', 'start_date': '2026-08-11'})
+[2026-08-10T06:02:37Z] [DEBUG] [core.cruds.doctor_profile_crud] — Profile lookup for user '6a79285945755dce0dd8c402' in hospital '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:02:37Z] [DEBUG] [chatbot.tools] — Authorized doctor IDs computed for 6a79285945755dce0dd8c402 (doctor): {'6a79285945755dce0dd8c403', '6a79285945755dce0dd8c402'}
+[2026-08-10T06:02:37Z] [INFO] [chatbot.tools] — Intercepted tool call 'get_appointments' with args {'doctor_id': '6a79285945755dce0dd8c402', 'end_date': '2026-08-11', 'start_date': '2026-08-11'} for user role 'doctor'
+[2026-08-10T06:02:37Z] [INFO] [chatbot.gemini_client] — Calling Gemini API model=gemini-3.6-flash turn=1
+[2026-08-10T06:02:39Z] [INFO] [chatbot.gemini_client] — Gemini returned final response text.
+[2026-08-10T06:02:39Z] [DEBUG] [chatbot.cruds.chat_crud] — Chat message created: 6a79697fdf3a839d1adaeb18 (role: assistant) in session 6a79691ddf3a839d1adaeb12
+[2026-08-10T06:02:39Z] [DEBUG] [common.auth] — Authenticating request via Bearer token
+[2026-08-10T06:02:39Z] [DEBUG] [common.tenant_scope] — Hospital scope resolved — role: 'doctor', hospital_id: '6a78a4b132590d8e095c8b13', user: 'chai@gmail.com'
+[2026-08-10T06:03:57Z] [DEBUG] [common.auth] — Authenticating request via Bearer token
+[2026-08-10T06:03:57Z] [DEBUG] [common.tenant_scope] — Hospital scope resolved — role: 'doctor', hospital_id: '6a78a4b132590d8e095c8b13', user: 'chai@gmail.com'
+[2026-08-10T06:05:13Z] [DEBUG] [common.auth] — Authenticating request via Bearer token
+[2026-08-10T06:05:13Z] [DEBUG] [common.tenant_scope] — Hospital scope resolved — role: 'doctor', hospital_id: '6a78a4b132590d8e095c8b13', user: 'chai@gmail.com'
+[2026-08-10T06:05:18Z] [DEBUG] [common.auth] — Authenticating request via Bearer token
+[2026-08-10T06:05:18Z] [DEBUG] [common.tenant_scope] — Hospital scope resolved — role: 'doctor', hospital_id: '6a78a4b132590d8e095c8b13', user: 'chai@gmail.com'
+[2026-08-10T06:29:24Z] [DEBUG] [core.cruds.user_crud] — User lookup by email 'sarvesh.sh7890@gmail.com' — found: True
+[2026-08-10T06:29:24Z] [DEBUG] [common.auth] — Access token created for subject: 6a78a42732590d8e095c8b12
+[2026-08-10T06:29:24Z] [INFO] [core.controllers.auth_controller] — Login successful — email: sarvesh.sh7890@gmail.com
+[2026-08-10T06:29:24Z] [DEBUG] [core.cruds.hospital_crud] — All hospitals fetched: 4 records
+[2026-08-10T06:29:24Z] [DEBUG] [core.cruds.appointment_crud] — All appointments for patient '6a78a42732590d8e095c8b12' fetched: 2 records
+[2026-08-10T06:29:24Z] [DEBUG] [core.cruds.hospital_crud] — All hospitals fetched: 4 records
+[2026-08-10T06:29:35Z] [DEBUG] [core.cruds.hospital_crud] — All hospitals fetched: 4 records
+[2026-08-10T06:29:35Z] [DEBUG] [core.cruds.hospital_crud] — All hospitals fetched: 4 records
+[2026-08-10T06:29:41Z] [DEBUG] [core.cruds.hospital_crud] — Hospital lookup by id '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:41Z] [DEBUG] [core.cruds.doctor_profile_crud] — Doctor profiles for hospital '6a78a4b132590d8e095c8b13' fetched: 2 records
+[2026-08-10T06:29:41Z] [DEBUG] [core.cruds.hospital_crud] — Hospital lookup by id '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:41Z] [DEBUG] [core.cruds.doctor_profile_crud] — Doctor profiles for hospital '6a78a4b132590d8e095c8b13' fetched: 2 records
+[2026-08-10T06:29:41Z] [DEBUG] [core.cruds.hospital_crud] — Hospital lookup by id '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:41Z] [DEBUG] [core.cruds.doctor_profile_crud] — Profile lookup by id '6a78a76832590d8e095c8b16' in hospital '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:41Z] [DEBUG] [core.cruds.hospital_crud] — Hospital lookup by id '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:41Z] [DEBUG] [core.cruds.doctor_profile_crud] — Profile lookup by id '6a78a76832590d8e095c8b16' in hospital '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:43Z] [DEBUG] [core.cruds.hospital_crud] — Hospital lookup by id '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:43Z] [DEBUG] [core.cruds.doctor_profile_crud] — Profile lookup by id '6a78a76832590d8e095c8b16' in hospital '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:43Z] [DEBUG] [core.cruds.appointment_crud] — Full slots (>= 1 patients) for hospital '6a78a4b132590d8e095c8b13', doctor '6a78a76832590d8e095c8b16' on 2026-08-12: []
+[2026-08-10T06:29:45Z] [DEBUG] [core.cruds.hospital_crud] — Hospital lookup by id '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:45Z] [DEBUG] [core.cruds.doctor_profile_crud] — Profile lookup by id '6a79285945755dce0dd8c403' in hospital '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:46Z] [DEBUG] [core.cruds.hospital_crud] — Hospital lookup by id '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:46Z] [DEBUG] [core.cruds.doctor_profile_crud] — Profile lookup by id '6a79285945755dce0dd8c403' in hospital '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:46Z] [DEBUG] [core.cruds.appointment_crud] — Full slots (>= 1 patients) for hospital '6a78a4b132590d8e095c8b13', doctor '6a79285945755dce0dd8c403' on 2026-08-13: []
+[2026-08-10T06:29:48Z] [DEBUG] [core.cruds.hospital_crud] — Hospital lookup by id '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:48Z] [DEBUG] [core.cruds.doctor_profile_crud] — Profile lookup by id '6a79285945755dce0dd8c403' in hospital '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:48Z] [DEBUG] [core.cruds.appointment_crud] — Full slots (>= 1 patients) for hospital '6a78a4b132590d8e095c8b13', doctor '6a79285945755dce0dd8c403' on 2026-08-14: []
+[2026-08-10T06:29:50Z] [DEBUG] [core.cruds.hospital_crud] — Hospital lookup by id '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:50Z] [DEBUG] [core.cruds.doctor_profile_crud] — Profile lookup by id '6a79285945755dce0dd8c403' in hospital '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:50Z] [DEBUG] [core.cruds.appointment_crud] — Full slots (>= 1 patients) for hospital '6a78a4b132590d8e095c8b13', doctor '6a79285945755dce0dd8c403' on 2026-08-10: []
+[2026-08-10T06:29:51Z] [DEBUG] [core.cruds.hospital_crud] — Hospital lookup by id '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:51Z] [DEBUG] [core.cruds.doctor_profile_crud] — Profile lookup by id '6a79285945755dce0dd8c403' in hospital '6a78a4b132590d8e095c8b13' — found: True
+[2026-08-10T06:29:51Z] [DEBUG] [core.cruds.appointment_crud] — Full slots (>= 1 patients) for hospital '6a78a4b132590d8e095c8b13', doctor '6a79285945755dce0dd8c403' on 2026-08-11: ['10:30']
+[2026-08-10T06:29:54Z] [DEBUG] [core.cruds.hospital_crud] — All hospitals fetched: 4 records
+[2026-08-10T06:29:54Z] [DEBUG] [core.cruds.hospital_crud] — All hospitals fetched: 4 records
+[2026-08-10T06:29:56Z] [DEBUG] [core.cruds.hospital_crud] — All hospitals fetched: 4 records
+[2026-08-10T06:29:56Z] [DEBUG] [core.cruds.appointment_crud] — All appointments for patient '6a78a42732590d8e095c8b12' fetched: 2 records
+[2026-08-10T06:29:56Z] [DEBUG] [core.cruds.hospital_crud] — All hospitals fetched: 4 records
+[2026-08-10T06:32:55Z] [DEBUG] [core.cruds.hospital_crud] — All hospitals fetched: 4 records
+[2026-08-10T06:32:55Z] [DEBUG] [core.cruds.hospital_crud] — All hospitals fetched: 4 records
