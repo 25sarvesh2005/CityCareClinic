@@ -546,7 +546,7 @@ function DoctorDashboard() {
                                       </>
                                     )}
 
-                                    {appointment.status === "accepted" && (
+                                    {(appointment.status === "accepted" || appointment.status === "pending") && (
                                       <Button
                                         size="xs"
                                         variant="indigo"

@@ -59,7 +59,12 @@ async def accept_appointment_request(
     except HTTPException:
         raise
     except Exception as error:
-        logging.error("Failed to accept appointment %s: %s", appointment_id, str(error), exc_info=True)
+        logging.error(
+            "Failed to accept appointment %s: %s",
+            appointment_id,
+            str(error),
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Something Went Wrong",
@@ -94,7 +99,12 @@ async def reject_appointment_request(
     except HTTPException:
         raise
     except Exception as error:
-        logging.error("Failed to reject appointment %s: %s", appointment_id, str(error), exc_info=True)
+        logging.error(
+            "Failed to reject appointment %s: %s",
+            appointment_id,
+            str(error),
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Something Went Wrong",
@@ -160,7 +170,9 @@ async def list_my_prescriptions_endpoint(
     except HTTPException:
         raise
     except Exception as error:
-        logging.error("Failed to list patient prescriptions: %s", str(error), exc_info=True)
+        logging.error(
+            "Failed to list patient prescriptions: %s", str(error), exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Something Went Wrong",
@@ -192,7 +204,12 @@ async def get_prescription_endpoint(
     except HTTPException:
         raise
     except Exception as error:
-        logging.error("Failed to get prescription %s: %s", prescription_id, str(error), exc_info=True)
+        logging.error(
+            "Failed to get prescription %s: %s",
+            prescription_id,
+            str(error),
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Something Went Wrong",
@@ -217,7 +234,9 @@ async def view_prescription_pdf(
             return FileResponse(
                 path=local_path,
                 media_type="application/pdf",
-                headers={"Content-Disposition": f"inline; filename=Prescription-{prescription_id}.pdf"},
+                headers={
+                    "Content-Disposition": f"inline; filename=Prescription-{prescription_id}.pdf"
+                },
             )
 
         if token:
@@ -237,7 +256,12 @@ async def view_prescription_pdf(
     except HTTPException:
         raise
     except Exception as error:
-        logging.error("Failed to fetch prescription PDF %s: %s", prescription_id, str(error), exc_info=True)
+        logging.error(
+            "Failed to fetch prescription PDF %s: %s",
+            prescription_id,
+            str(error),
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Something Went Wrong",
@@ -260,5 +284,7 @@ async def get_local_pdf_file(prescription_id: str):
     return FileResponse(
         path=local_path,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"inline; filename=Prescription-{prescription_id}.pdf"},
+        headers={
+            "Content-Disposition": f"inline; filename=Prescription-{prescription_id}.pdf"
+        },
     )

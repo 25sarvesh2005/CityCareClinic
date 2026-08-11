@@ -452,8 +452,11 @@ export const api = {
       if (pdf_url.startsWith("http://") || pdf_url.startsWith("https://")) {
         return pdf_url;
       }
-      if (pdf_url.startsWith("/")) {
+      if (pdf_url.startsWith("/api/")) {
         return `${backendOrigin}${pdf_url}`;
+      }
+      if (pdf_url.startsWith("/")) {
+        return `${backendOrigin}/api${pdf_url}`;
       }
     }
     if (prescription_id) {
