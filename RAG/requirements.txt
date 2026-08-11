@@ -1,0 +1,6 @@
+langchain-text-splitters
+langchain-core
+langchain-pdfmuse
+langchain-google-genai
+python-dotenv
+langchain-mongodb

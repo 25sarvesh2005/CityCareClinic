@@ -74,6 +74,9 @@ class ScheduleEntryResponse(BaseModel):
     reason: str = Field(..., description="Stated reason for the visit.")
     temperature: float = Field(..., description="Reported body temperature in Fahrenheit.")
     symptoms: List[str] = Field(..., description="List of reported symptoms.")
+    status: str = Field(default="pending", description="Lifecycle status of appointment (pending, accepted, rejected, completed, cancelled).")
+    prescription_id: Optional[str] = Field(default=None, description="Prescription ObjectId if issued.")
+    pdf_url: Optional[str] = Field(default=None, description="URL of prescription PDF if issued.")
     is_cancelled: bool = Field(..., description="Whether the appointment was cancelled.")
     cancellation_reason: Optional[str] = Field(default=None, description="Reason for cancellation if applicable.")
 

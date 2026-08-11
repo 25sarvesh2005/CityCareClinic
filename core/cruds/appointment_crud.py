@@ -252,34 +252,40 @@ async def find_schedule_by_date(
     engine: AIOEngine,
     hospital_id: str,
     appointment_date: str,
+    doctor_ids: Optional[List[str]] = None,
 ) -> List[AppointmentModel]:
     """
     Retrieve all appointments for a given hospital + date, ordered by slot time.
-
-    Used by the doctor's schedule endpoint. Includes both active and cancelled
-    appointments for a complete audit trail.
+    Optionally filters by doctor_ids to enforce strict doctor data isolation.
 
     Args:
-        engine           (AIOEngine): The active ODMantic engine instance.
-        hospital_id      (str)      : Required tenant scope — never omit.
-        appointment_date (str)      : Date string in YYYY-MM-DD format.
+        engine           (AIOEngine)            : The active ODMantic engine instance.
+        hospital_id      (str)                  : Required tenant scope — never omit.
+        appointment_date (str)                  : Date string in YYYY-MM-DD format.
+        doctor_ids       (Optional[List[str]])  : Optional list of doctor IDs to scope results.
 
     Returns:
-        List[AppointmentModel]: All appointments for the hospital + date, sorted by slot.
+        List[AppointmentModel]: Appointments matching criteria, sorted by slot.
 
     Raises:
         Exception: Propagates any Motor or ODMantic read failure.
     """
+    query = (AppointmentModel.hospital_id == hospital_id) & (AppointmentModel.date == appointment_date)
+    if doctor_ids:
+        valid_ids = [d for d in doctor_ids if d]
+        if valid_ids:
+            query = query & (AppointmentModel.doctor_id.in_(valid_ids))
+
     appointments = await engine.find(
         AppointmentModel,
-        (AppointmentModel.hospital_id == hospital_id)
-        & (AppointmentModel.date == appointment_date),
+        query,
         sort=AppointmentModel.slot,
     )
     logger.debug(
-        "Schedule for hospital '%s' on %s fetched: %d appointments",
+        "Schedule for hospital '%s' on %s (doctor_ids: %s) fetched: %d appointments",
         hospital_id,
         appointment_date,
+        doctor_ids,
         len(appointments),
     )
     return list(appointments)
@@ -289,14 +295,17 @@ async def count_today_appointments(
     engine: AIOEngine,
     hospital_id: str,
     today_date: str,
+    doctor_ids: Optional[List[str]] = None,
 ) -> int:
     """
-    Count active (non-cancelled) appointments scheduled for today at a specific hospital.
+    Count active (non-cancelled) appointments scheduled for today at a specific hospital,
+    optionally scoped to specific doctors.
 
     Args:
         engine      (AIOEngine): The active ODMantic engine instance.
         hospital_id (str)      : Required tenant scope — never omit.
         today_date  (str)      : Today's date in YYYY-MM-DD format.
+        doctor_ids  (Optional[List[str]]): Optional doctor IDs to filter counts.
 
     Returns:
         int: Count of active appointments for today at that hospital.
@@ -304,13 +313,23 @@ async def count_today_appointments(
     Raises:
         Exception: Propagates any Motor or ODMantic read failure.
     """
-    count = await engine.count(
-        AppointmentModel,
+    query = (
         (AppointmentModel.hospital_id == hospital_id)
         & (AppointmentModel.date == today_date)
-        & (AppointmentModel.is_cancelled == False),
+        & (AppointmentModel.is_cancelled == False)
     )
-    logger.debug("Today's active appointment count for hospital '%s': %d", hospital_id, count)
+    if doctor_ids:
+        valid_ids = [d for d in doctor_ids if d]
+        if valid_ids:
+            query = query & (AppointmentModel.doctor_id.in_(valid_ids))
+
+    count = await engine.count(AppointmentModel, query)
+    logger.debug(
+        "Today's active appointment count for hospital '%s' (doctor_ids: %s): %d",
+        hospital_id,
+        doctor_ids,
+        count,
+    )
     return count
 
 
@@ -318,14 +337,17 @@ async def count_upcoming_appointments(
     engine: AIOEngine,
     hospital_id: str,
     today_date: str,
+    doctor_ids: Optional[List[str]] = None,
 ) -> int:
     """
-    Count active (non-cancelled) appointments scheduled for future dates at a specific hospital.
+    Count active (non-cancelled) appointments scheduled for future dates at a specific hospital,
+    optionally scoped to specific doctors.
 
     Args:
         engine      (AIOEngine): The active ODMantic engine instance.
         hospital_id (str)      : Required tenant scope — never omit.
         today_date  (str)      : Today's date in YYYY-MM-DD format (exclusive lower bound).
+        doctor_ids  (Optional[List[str]]): Optional doctor IDs to filter counts.
 
     Returns:
         int: Count of active appointments after today at that hospital.
@@ -333,34 +355,78 @@ async def count_upcoming_appointments(
     Raises:
         Exception: Propagates any Motor or ODMantic read failure.
     """
-    count = await engine.count(
-        AppointmentModel,
+    query = (
         (AppointmentModel.hospital_id == hospital_id)
         & (AppointmentModel.date > today_date)
-        & (AppointmentModel.is_cancelled == False),
+        & (AppointmentModel.is_cancelled == False)
     )
-    logger.debug("Upcoming active appointment count for hospital '%s': %d", hospital_id, count)
+    if doctor_ids:
+        valid_ids = [d for d in doctor_ids if d]
+        if valid_ids:
+            query = query & (AppointmentModel.doctor_id.in_(valid_ids))
+
+    count = await engine.count(AppointmentModel, query)
+    logger.debug(
+        "Upcoming active appointment count for hospital '%s' (doctor_ids: %s): %d",
+        hospital_id,
+        doctor_ids,
+        count,
+    )
     return count
+
+
+async def count_unique_patients(
+    engine: AIOEngine,
+    hospital_id: Optional[str] = None,
+    doctor_ids: Optional[List[str]] = None,
+) -> int:
+    """
+    Count the number of unique patients who have booked appointments.
+    Optionally filters by hospital_id and/or doctor_ids.
+
+    Args:
+        engine      (AIOEngine): The active ODMantic engine instance.
+        hospital_id (Optional[str]): Optional tenant scope.
+        doctor_ids  (Optional[List[str]]): Optional doctor IDs to filter unique patients.
+
+    Returns:
+        int: Count of unique patient IDs matching the filters.
+    """
+    query = {}
+    if hospital_id:
+        query["hospital_id"] = hospital_id
+    if doctor_ids:
+        valid_ids = [d for d in doctor_ids if d]
+        if valid_ids:
+            if len(valid_ids) == 1:
+                query["doctor_id"] = valid_ids[0]
+            else:
+                query["doctor_id"] = {"$in": valid_ids}
+
+    db = engine.database
+    collection = db["appointments"]
+    distinct_patients = await collection.distinct("patient_id", query)
+    return len(distinct_patients)
+
 
 
 async def find_appointment_by_id(
     engine: AIOEngine,
-    hospital_id: str,
     appointment_id: str,
+    hospital_id: Optional[str] = None,
 ) -> Optional[AppointmentModel]:
     """
-    Retrieve a single appointment document by its ObjectId, scoped to a hospital tenant.
+    Retrieve a single appointment document by its ObjectId.
 
-    Scoping by hospital_id prevents a patient from one tenant from accidentally
-    looking up or cancelling appointments that belong to a different tenant.
+    Optionally scoped to a hospital_id if provided.
 
     Args:
-        engine         (AIOEngine): The active ODMantic engine instance.
-        hospital_id    (str)      : Required tenant scope — never omit.
-        appointment_id (str)      : String ObjectId of the appointment.
+        engine         (AIOEngine)          : The active ODMantic engine instance.
+        appointment_id (str)                : String ObjectId of the appointment.
+        hospital_id    (Optional[str])      : Optional tenant scope.
 
     Returns:
-        Optional[AppointmentModel]: The matching document (within the tenant), or None.
+        Optional[AppointmentModel]: The matching document, or None.
 
     Raises:
         Exception: Propagates any Motor or ODMantic read failure.
@@ -371,11 +437,17 @@ async def find_appointment_by_id(
         logger.warning("Invalid ObjectId format: %s", appointment_id)
         return None
 
-    appointment = await engine.find_one(
-        AppointmentModel,
-        (AppointmentModel.id == object_id)
-        & (AppointmentModel.hospital_id == hospital_id),
-    )
+    if hospital_id:
+        appointment = await engine.find_one(
+            AppointmentModel,
+            (AppointmentModel.id == object_id)
+            & (AppointmentModel.hospital_id == hospital_id),
+        )
+    else:
+        appointment = await engine.find_one(
+            AppointmentModel,
+            AppointmentModel.id == object_id,
+        )
     logger.debug(
         "Appointment lookup by id '%s' in hospital '%s' — found: %s",
         appointment_id,

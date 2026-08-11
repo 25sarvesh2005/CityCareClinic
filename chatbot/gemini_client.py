@@ -73,7 +73,53 @@ get_doctor_list_tool = types.FunctionDeclaration(
     ),
 )
 
-TOOLS = [types.Tool(function_declarations=[get_appointments_tool, get_doctor_list_tool])]
+search_patient_handbook_tool = types.FunctionDeclaration(
+    name="search_patient_handbook",
+    description=(
+        "Search the CityCare Clinic Patient Handbook and knowledge base for clinic policies, opening hours, "
+        "patient rules, services, cancellation guidelines, emergency procedures, and general FAQs."
+    ),
+    parameters=types.Schema(
+        type="OBJECT",
+        properties={
+            "query": types.Schema(
+                type="STRING",
+                description="The search query string to look up in the handbook (e.g. 'cancellation policy', 'opening hours').",
+            ),
+        },
+        required=["query"],
+    ),
+)
+
+search_patient_prescriptions_tool = types.FunctionDeclaration(
+    name="search_patient_prescriptions",
+    description=(
+        "Search the patient's medical prescriptions using RAG vector similarity search. "
+        "Use this tool when a patient asks about their prescribed medicines, dosages, frequencies, "
+        "doctor advice/notes, diagnoses, or prescription instructions."
+    ),
+    parameters=types.Schema(
+        type="OBJECT",
+        properties={
+            "query": types.Schema(
+                type="STRING",
+                description="The query string regarding prescription details (e.g. 'fever medicine dosage', 'cough syrup instructions').",
+            ),
+        },
+        required=["query"],
+    ),
+)
+
+TOOLS = [
+    types.Tool(
+        function_declarations=[
+            get_appointments_tool,
+            get_doctor_list_tool,
+            search_patient_handbook_tool,
+            search_patient_prescriptions_tool,
+        ]
+    )
+]
 
 
 async def run_chat_completion(
@@ -102,8 +148,8 @@ async def run_chat_completion(
     user_id = current_user.get("user_id", "")
 
     system_instruction = f"""
-You are the CityCare Clinic Schedule-Assistant AI.
-You help doctors and hospital owners view schedules, appointments, and doctor rosters.
+You are the CityCare Clinic Schedule-Assistant, Prescription Assistant & Patient Knowledge AI.
+You help patients, doctors, and hospital owners view schedules, appointments, doctor rosters, clinic policies, and patient prescriptions via RAG.
 
 Current Context:
 - User Name: {name}
@@ -113,12 +159,14 @@ Current Context:
 - Today's Date: {today_str}
 
 Rules:
-1. Always use function calls (`get_appointments`, `get_doctor_list`) to retrieve live data. NEVER make up appointment data or dates.
+1. Always use function calls (`get_appointments`, `get_doctor_list`, `search_patient_handbook`, `search_patient_prescriptions`) to retrieve accurate data. NEVER invent appointment data, prescriptions, dosages, clinic rules, or dates.
 2. If asked about appointments or schedule, determine the relevant date or date range (default start_date and end_date to today's date '{today_str}' if not specified) and call `get_appointments`.
 3. For doctors asking about their schedule, call `get_appointments` using their doctor ID (user ID '{user_id}').
 4. For hospital owners asking about clinic doctors or schedules, first call `get_doctor_list(hospital_id='{hospital_id}')` if doctor IDs are needed, then call `get_appointments`.
-5. Be concise, polite, professional, and clear in formatting schedules and appointment summaries.
-6. If a tool call fails or returns an authorization error, explain the permission restriction politely.
+5. For patient queries about their prescribed medicines, dosages, frequencies, doctor notes, or diagnoses, call `search_patient_prescriptions(query=...)` to fetch their prescription RAG records.
+6. For general questions regarding clinic rules, patient handbook policies, opening hours, cancellations, services, or patient guidelines, call `search_patient_handbook(query=...)`.
+7. Be concise, polite, professional, empathetic, and clear in formatting schedules, prescriptions, and handbook summaries.
+8. If a tool call fails or returns an authorization error, explain the permission restriction politely.
 """
 
     # Format contents for Gemini SDK

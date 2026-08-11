@@ -14,8 +14,8 @@ export function GlassCard({
 }
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost" | "outline" | "danger";
-  size?: "sm" | "md";
+  variant?: "primary" | "secondary" | "ghost" | "outline" | "danger" | "cyan" | "indigo";
+  size?: "xs" | "sm" | "md";
 };
 
 export function Button({ variant = "primary", size = "md", className, ...props }: ButtonProps) {
@@ -26,7 +26,7 @@ export function Button({ variant = "primary", size = "md", className, ...props }
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
         "disabled:cursor-not-allowed disabled:opacity-50",
         "active:scale-[0.97]",
-        size === "sm" ? "px-3.5 py-2 text-xs" : "px-5 py-2.5 text-sm",
+        size === "xs" ? "px-2.5 py-1 text-[11px]" : size === "sm" ? "px-3.5 py-2 text-xs" : "px-5 py-2.5 text-sm",
         variant === "primary" &&
           "bg-gradient-to-r from-indigo to-cyan text-cyan-foreground hover:glow-indigo hover:-translate-y-0.5",
         variant === "secondary" && "bg-secondary text-secondary-foreground hover:bg-secondary/80",
@@ -35,6 +35,10 @@ export function Button({ variant = "primary", size = "md", className, ...props }
         variant === "ghost" && "text-muted-foreground hover:bg-secondary hover:text-foreground",
         variant === "danger" &&
           "bg-destructive/15 text-destructive hover:bg-destructive/25 border border-destructive/30",
+        variant === "cyan" &&
+          "bg-cyan/15 text-cyan hover:bg-cyan/25 border border-cyan/30",
+        variant === "indigo" &&
+          "bg-indigo/15 text-indigo hover:bg-indigo/25 border border-indigo/30",
         className,
       )}
       {...props}
@@ -82,7 +86,7 @@ export function Badge({
   tone = "indigo",
 }: {
   children: ReactNode;
-  tone?: "indigo" | "cyan" | "success" | "danger" | "muted";
+  tone?: "indigo" | "cyan" | "success" | "danger" | "warning" | "muted";
 }) {
   return (
     <span
@@ -92,6 +96,7 @@ export function Badge({
         tone === "cyan" && "bg-cyan/15 text-cyan",
         tone === "success" && "bg-success/15 text-success",
         tone === "danger" && "bg-destructive/15 text-destructive",
+        tone === "warning" && "bg-warning/15 text-warning",
         tone === "muted" && "bg-secondary text-muted-foreground",
       )}
     >

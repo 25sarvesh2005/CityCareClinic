@@ -103,6 +103,50 @@ function DoctorDashboard() {
     retry: false,
   });
 
+  const [selectedApptForPrescription, setSelectedApptForPrescription] = useState<DoctorScheduleEntry | null>(null);
+  const [rxDiagnosis, setRxDiagnosis] = useState("");
+  const [rxNotes, setRxNotes] = useState("");
+  const [rxFollowUp, setRxFollowUp] = useState("");
+  const [rxMedications, setRxMedications] = useState<
+    { medicine_name: string; dosage: string; frequency: string; duration: string; instructions?: string }[]
+  >([
+    { medicine_name: "", dosage: "", frequency: "1-0-1 after meals", duration: "5 days", instructions: "" },
+  ]);
+
+  const acceptMutation = useMutation({
+    mutationFn: (appointmentId: string) => api.acceptAppointment(appointmentId),
+    onSuccess: (res) => {
+      toast.success("Appointment Accepted!", res.message);
+      queryClient.invalidateQueries({ queryKey: ["doctor-schedule"] });
+    },
+    onError: (err) => toast.error("Error", (err as ApiError).message),
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (appointmentId: string) => api.rejectAppointment(appointmentId),
+    onSuccess: (res) => {
+      toast.info("Appointment Declined", res.message);
+      queryClient.invalidateQueries({ queryKey: ["doctor-schedule"] });
+    },
+    onError: (err) => toast.error("Error", (err as ApiError).message),
+  });
+
+  const createPrescriptionMutation = useMutation({
+    mutationFn: api.createPrescription,
+    onSuccess: (res) => {
+      toast.success("Prescription Created!", `PDF generated and stored for ${res.patient_name}.`);
+      setSelectedApptForPrescription(null);
+      setRxDiagnosis("");
+      setRxNotes("");
+      setRxFollowUp("");
+      setRxMedications([
+        { medicine_name: "", dosage: "", frequency: "1-0-1 after meals", duration: "5 days", instructions: "" },
+      ]);
+      queryClient.invalidateQueries({ queryKey: ["doctor-schedule"] });
+    },
+    onError: (err) => toast.error("Failed to Create Prescription", (err as ApiError).message),
+  });
+
   const isDayUnavailable = useMemo(() => {
     if (scheduleQuery.data?.is_unavailable) return true;
     return unavailabilityQuery.data?.unavailable_dates?.includes(date) ?? false;
@@ -460,6 +504,71 @@ function DoctorDashboard() {
                                 "{appointment.reason}"
                               </p>
 
+                              {/* Status Badges & Action Buttons */}
+                              {!appointment.is_cancelled && (
+                                <div className="mt-3 pt-3 border-t border-glass-border/40 flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[11px] text-muted-foreground font-medium">Status:</span>
+                                    {appointment.status === "pending" && (
+                                      <Badge tone="warning">Pending Approval</Badge>
+                                    )}
+                                    {appointment.status === "accepted" && (
+                                      <Badge tone="cyan">Accepted</Badge>
+                                    )}
+                                    {appointment.status === "completed" && (
+                                      <Badge tone="success">Prescription Issued</Badge>
+                                    )}
+                                    {appointment.status === "rejected" && (
+                                      <Badge tone="danger">Declined</Badge>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    {appointment.status === "pending" && (
+                                      <>
+                                        <Button
+                                          size="xs"
+                                          variant="secondary"
+                                          className="text-destructive hover:bg-destructive/10"
+                                          onClick={() => rejectMutation.mutate(appointment.appointment_id)}
+                                          disabled={rejectMutation.isPending}
+                                        >
+                                          Decline
+                                        </Button>
+                                        <Button
+                                          size="xs"
+                                          variant="cyan"
+                                          onClick={() => acceptMutation.mutate(appointment.appointment_id)}
+                                          disabled={acceptMutation.isPending}
+                                        >
+                                          Accept Request
+                                        </Button>
+                                      </>
+                                    )}
+
+                                    {appointment.status === "accepted" && (
+                                      <Button
+                                        size="xs"
+                                        variant="indigo"
+                                        onClick={() => setSelectedApptForPrescription(appointment)}
+                                      >
+                                        <Stethoscope className="size-3 mr-1" /> Write Prescription
+                                      </Button>
+                                    )}
+
+                                    {(appointment.status === "completed" || appointment.pdf_url) && (
+                                      <Button
+                                        size="xs"
+                                        variant="secondary"
+                                        onClick={() => window.open(api.getPdfUrl(appointment.pdf_url, appointment.prescription_id), "_blank")}
+                                      >
+                                        <CheckCircle2 className="size-3 text-cyan mr-1" /> View PDF
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
                               {/* Cancellation Reason Notice */}
                               {appointment.is_cancelled && appointment.cancellation_reason && (
                                 <p className="text-[11px] text-destructive bg-destructive/10 rounded-lg p-2 border border-destructive/20 font-medium">
@@ -483,6 +592,204 @@ function DoctorDashboard() {
           )}
         </GlassCard>
       </div>
+
+      {/* Prescription Creation Dialog Modal */}
+      {selectedApptForPrescription && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-md p-4 animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-2xl border border-glass-border bg-card p-6 shadow-2xl space-y-6 my-8">
+            <div className="flex items-center justify-between border-b border-glass-border pb-4">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-cyan">
+                  Doctor Consultation
+                </span>
+                <h3 className="text-xl font-bold text-foreground">
+                  Create Medical Prescription
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Patient: <span className="font-semibold text-foreground">{selectedApptForPrescription.patient_name}</span> | Slot: {formatSlotDisplay(selectedApptForPrescription.slot)}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => setSelectedApptForPrescription(null)}
+              >
+                ✕
+              </Button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                createPrescriptionMutation.mutate({
+                  appointment_id: selectedApptForPrescription.appointment_id,
+                  diagnosis: rxDiagnosis,
+                  medications: rxMedications,
+                  notes: rxNotes,
+                  follow_up_date: rxFollowUp,
+                });
+              }}
+              className="space-y-4 text-xs"
+            >
+              {/* Diagnosis */}
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">
+                  Clinical Diagnosis <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Acute Viral Fever with Upper Respiratory Tract Infection"
+                  value={rxDiagnosis}
+                  onChange={(e) => setRxDiagnosis(e.target.value)}
+                  className="w-full rounded-xl border border-glass-border bg-secondary/50 px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-cyan text-xs"
+                />
+              </div>
+
+              {/* Medications List Builder */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-foreground">
+                    Prescribed Medications <span className="text-destructive">*</span>
+                  </label>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="secondary"
+                    onClick={() =>
+                      setRxMedications((prev) => [
+                        ...prev,
+                        { medicine_name: "", dosage: "", frequency: "1-0-1 after meals", duration: "5 days", instructions: "" },
+                      ])
+                    }
+                  >
+                    + Add Medicine
+                  </Button>
+                </div>
+
+                {rxMedications.map((med, idx) => (
+                  <div key={idx} className="rounded-xl border border-glass-border/60 bg-secondary/30 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-cyan text-[11px]">Medicine #{idx + 1}</span>
+                      {rxMedications.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setRxMedications((prev) => prev.filter((_, i) => i !== idx))}
+                          className="text-destructive hover:underline text-[11px]"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Medicine Name (e.g. Paracetamol 500mg)"
+                        value={med.medicine_name}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setRxMedications((prev) => prev.map((m, i) => (i === idx ? { ...m, medicine_name: val } : m)));
+                        }}
+                        className="rounded-lg border border-glass-border bg-background px-2 py-1.5 text-xs text-foreground"
+                      />
+                      <input
+                        type="text"
+                        required
+                        placeholder="Dosage (e.g. 500 mg)"
+                        value={med.dosage}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setRxMedications((prev) => prev.map((m, i) => (i === idx ? { ...m, dosage: val } : m)));
+                        }}
+                        className="rounded-lg border border-glass-border bg-background px-2 py-1.5 text-xs text-foreground"
+                      />
+                      <input
+                        type="text"
+                        required
+                        placeholder="Frequency (e.g. 1-0-1 after meals)"
+                        value={med.frequency}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setRxMedications((prev) => prev.map((m, i) => (i === idx ? { ...m, frequency: val } : m)));
+                        }}
+                        className="rounded-lg border border-glass-border bg-background px-2 py-1.5 text-xs text-foreground"
+                      />
+                      <input
+                        type="text"
+                        required
+                        placeholder="Duration (e.g. 5 days)"
+                        value={med.duration}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setRxMedications((prev) => prev.map((m, i) => (i === idx ? { ...m, duration: val } : m)));
+                        }}
+                        className="rounded-lg border border-glass-border bg-background px-2 py-1.5 text-xs text-foreground"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Special Instructions (Optional, e.g. Take with warm water)"
+                      value={med.instructions || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setRxMedications((prev) => prev.map((m, i) => (i === idx ? { ...m, instructions: val } : m)));
+                      }}
+                      className="w-full rounded-lg border border-glass-border bg-background px-2 py-1.5 text-xs text-foreground"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Notes & Follow up */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1">
+                    Doctor Advice / Notes (Optional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Drink plenty of water and rest well."
+                    value={rxNotes}
+                    onChange={(e) => setRxNotes(e.target.value)}
+                    className="w-full rounded-xl border border-glass-border bg-secondary/50 px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-cyan text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1">
+                    Follow-up Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={rxFollowUp}
+                    onChange={(e) => setRxFollowUp(e.target.value)}
+                    className="w-full rounded-xl border border-glass-border bg-secondary/50 px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-cyan text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-glass-border">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setSelectedApptForPrescription(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="cyan"
+                  disabled={createPrescriptionMutation.isPending}
+                >
+                  {createPrescriptionMutation.isPending ? "Generating PDF & Uploading..." : "Issue & Store PDF Prescription"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <ScheduleChatBot />
     </AppShell>
   );

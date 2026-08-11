@@ -92,7 +92,7 @@ export function ScheduleChatBot() {
 
     try {
       const res = await api.sendScheduleChatMessage({
-        session_id: sessionId,
+        ...(sessionId ? { session_id: sessionId } : {}),
         message: textToSend,
       });
 

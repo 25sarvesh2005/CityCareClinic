@@ -216,8 +216,43 @@ Instead of writing the chatbot as a monolithic script, the chatbot was built fol
 ---
 
 ### Verification & Test Suite
-All backend functionality and chatbot endpoints are verified via automated tests:
+All backend functionality, chatbot endpoints, and RAG vector search are verified via automated tests:
 ```bash
 .venv313\Scripts\python.exe -m pytest
 ```
-*Result: 40 tests passed successfully across authentication, appointments, hospitals, doctors, admin, and chatbot modules.*
+*Result: 43 tests passed successfully across authentication, appointments, hospitals, doctors, admin, chatbot, and RAG modules.*
+
+---
+
+## 9. 📚 Step 8: RAG Architecture & Patient Handbook Knowledge Base
+
+The application incorporates a **Retrieval-Augmented Generation (RAG)** pipeline to answer clinic policy, FAQ, opening hours, and patient handbook questions.
+
+```mermaid
+flowchart LR
+    PDF["Patient Handbook PDF"] --> Ingest["scripts/ingest_docs.py"]
+    Ingest --> Embed["Google Gemini Embeddings (models/gemini-embedding-001)"]
+    Embed --> ChromaDB[("ChromaDB Persistent Vector Store")]
+    
+    UserPrompt["User: What is the cancellation policy?"] --> Gemini["Gemini Assistant"]
+    Gemini -- "Tool Call: search_patient_handbook(query)" --> Dispatcher["chatbot/tools.py Security Gate"]
+    Dispatcher --> RAGService["chatbot/rag_service.py"]
+    RAGService --> ChromaDB
+    ChromaDB -- "Top K Relevant Snippets" --> RAGService
+    RAGService -- "Context Text & Pages" --> Gemini
+    Gemini -- "Natural Language Answer with Citations" --> UserResponse["User Answer"]
+```
+
+### RAG Key Components
+1. **Document Ingestion (`scripts/ingest_docs.py`)**:
+   - Parses `CityCare-Clinic-Patient-Handbook.pdf` using `PyPDFLoader`.
+   - Chunks text into 1000-character segments with 200-character overlaps using `RecursiveCharacterTextSplitter`.
+   - Embeds text chunks via `GoogleGenerativeAIEmbeddings` using model `models/gemini-embedding-001`.
+   - Indexes and persists embeddings in `data/chroma_db`.
+2. **Core RAG Service ([`chatbot/rag_service.py`](file:///c:/Games/FOLDER%20PRACTICE/CITYCARE_CLINIC/chatbot/rag_service.py))**:
+   - Provides `ingest_pdf()` for document processing.
+   - Provides `search_handbook(query, top_k)` for similarity search.
+3. **Gemini RAG Function Tool ([`chatbot/gemini_client.py`](file:///c:/Games/FOLDER%20PRACTICE/CITYCARE_CLINIC/chatbot/gemini_client.py))**:
+   - Registers `search_patient_handbook` tool declaration for Gemini function calling.
+   - System prompt directs Gemini to search handbook for clinic policy and patient FAQ queries.
+

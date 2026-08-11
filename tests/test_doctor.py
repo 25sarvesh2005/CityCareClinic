@@ -151,3 +151,73 @@ async def test_doctor_toggle_unavailability(async_client):
     assert toggle_back.status_code == 200
     assert target_date not in toggle_back.json()["unavailable_dates"]
 
+
+@pytest.mark.asyncio
+async def test_doctor_stats_doctor_scoping(async_client, booking_context):
+    """Test that doctor stats are correctly isolated and calculated per doctor."""
+    # 1. Signup a patient and log them in
+    await async_client.post(
+        "/api/v1/signup",
+        json={"name": "Test Patient", "email": "testpatient@example.com", "password": "SecurePassword123!"},
+    )
+    login_res = await async_client.post(
+        "/api/v1/login",
+        json={"email": "testpatient@example.com", "password": "SecurePassword123!"},
+    )
+    patient_token = login_res.json()["access_token"]
+
+    # 2. Book an appointment for the doctor in booking_context (for tomorrow)
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    book_res = await async_client.post(
+        "/api/v1/book",
+        headers={"Authorization": f"Bearer {patient_token}"},
+        json={
+            "hospital_id": booking_context["hospital_id"],
+            "doctor_id": booking_context["doctor_id"],
+            "date": tomorrow,
+            "slot": "10:00",
+            "reason": "General Checkup",
+            "temperature": 98.6,
+            "symptoms": ["fever"],
+        },
+    )
+    assert book_res.status_code == 201
+
+    # 3. Log in as the doctor dr.booking@test.com
+    doc_login = await async_client.post(
+        "/api/v1/login",
+        json={"email": "dr.booking@test.com", "password": "Doctor@Test1234"},
+    )
+    assert doc_login.status_code == 200
+    doc_token = doc_login.json()["access_token"]
+
+    # 4. Fetch stats for the logged-in doctor
+    stats_res = await async_client.get(
+        "/api/v1/doctor/stats",
+        headers={"Authorization": f"Bearer {doc_token}"},
+    )
+    assert stats_res.status_code == 200
+    data = stats_res.json()
+    assert data["total_registered_patients"] == 1
+    assert data["upcoming_visit_count"] == 1
+    assert data["todays_visit_count"] == 0
+
+    # 5. Log in as another doctor (e.g. Dr. Meera) and verify their stats are 0
+    meera_login = await async_client.post(
+        "/api/v1/login",
+        json={"email": "dr.meera@citycare.com", "password": "doctor123"},
+    )
+    assert meera_login.status_code == 200
+    meera_token = meera_login.json()["access_token"]
+
+    meera_stats_res = await async_client.get(
+        "/api/v1/doctor/stats",
+        headers={"Authorization": f"Bearer {meera_token}"},
+    )
+    assert meera_stats_res.status_code == 200
+    meera_data = meera_stats_res.json()
+    assert meera_data["total_registered_patients"] == 0
+    assert meera_data["upcoming_visit_count"] == 0
+    assert meera_data["todays_visit_count"] == 0
+
+

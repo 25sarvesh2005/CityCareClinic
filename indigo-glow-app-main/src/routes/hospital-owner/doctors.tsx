@@ -87,7 +87,7 @@ function DoctorsContent() {
 
   async function handleToggleDoctorStatus(profileId: string, currentActive: boolean) {
     try {
-      await api.setDoctorStatus(profileId, !currentActive);
+      await api.setDoctorStatus(profileId, { is_active: !currentActive });
       toast.success(
         `Doctor profile ${!currentActive ? "activated" : "deactivated"} successfully.`,
       );

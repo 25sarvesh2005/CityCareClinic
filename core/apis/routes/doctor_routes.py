@@ -193,7 +193,10 @@ async def get_doctor_stats(
                 detail="Access denied. Doctor role required.",
             )
         hospital_id = authenticated_user_details.get("hospital_id") or ""
-        result = await DoctorController().get_stats(hospital_id=hospital_id)
+        doctor_user_id = authenticated_user_details.get("user_id") or ""
+        result = await DoctorController().get_stats(
+            hospital_id=hospital_id, doctor_user_id=doctor_user_id
+        )
         return result
 
     except HTTPException:

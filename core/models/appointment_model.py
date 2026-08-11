@@ -30,7 +30,7 @@ from typing import List, Optional
 from odmantic import Field, Model
 from pymongo import ASCENDING, IndexModel
 
-from core.constants import Symptom
+from core.constants import AppointmentStatus, Symptom
 
 
 class AppointmentModel(Model):
@@ -44,18 +44,19 @@ class AppointmentModel(Model):
     impossible to create an appointment without tenant and doctor scope.
 
     Attributes:
-        hospital_id         (str)          : String ObjectId of the HospitalModel — tenant scope.
-        doctor_id           (str)          : String ObjectId of the UserModel (role=doctor).
-        patient_id          (str)          : String ObjectId of the patient UserModel.
-        patient_name        (str)          : Full name of the patient (denormalized for fast reads).
-        date                (str)          : Appointment date in YYYY-MM-DD format.
-        slot                (str)          : Appointment time slot in HH:MM format.
-        reason              (str)          : Patient's stated reason for the visit.
-        temperature         (float)        : Body temperature in degrees Fahrenheit.
-        symptoms            (List[Symptom]): One or more reported symptoms.
-        is_cancelled        (bool)         : Soft-delete flag. True if cancelled.
-        cancellation_reason (Optional[str]): Detailed reason if appointment was cancelled.
-        created_at          (datetime)     : UTC timestamp of when the booking was made.
+        hospital_id         (str)              : String ObjectId of the HospitalModel — tenant scope.
+        doctor_id           (str)              : String ObjectId of the UserModel (role=doctor).
+        patient_id          (str)              : String ObjectId of the patient UserModel.
+        patient_name        (str)              : Full name of the patient (denormalized for fast reads).
+        date                (str)              : Appointment date in YYYY-MM-DD format.
+        slot                (str)              : Appointment time slot in HH:MM format.
+        reason              (str)              : Patient's stated reason for the visit.
+        temperature         (float)            : Body temperature in degrees Fahrenheit.
+        symptoms            (List[Symptom])    : One or more reported symptoms.
+        status              (AppointmentStatus): Lifecycle status (pending, accepted, rejected, completed, cancelled).
+        is_cancelled        (bool)             : Soft-delete flag. True if cancelled.
+        cancellation_reason (Optional[str])    : Detailed reason if appointment was cancelled.
+        created_at          (datetime)         : UTC timestamp of when the booking was made.
     """
 
     hospital_id: str
@@ -67,6 +68,7 @@ class AppointmentModel(Model):
     reason: str
     temperature: float
     symptoms: List[Symptom]
+    status: AppointmentStatus = Field(default=AppointmentStatus.PENDING)
     is_cancelled: bool = False
     cancellation_reason: Optional[str] = Field(default=None)
     created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))

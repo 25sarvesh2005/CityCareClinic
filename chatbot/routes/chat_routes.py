@@ -17,16 +17,16 @@ from core.constants import UserRole
 
 router = APIRouter(tags=["Schedule Chatbot"])
 
-ALLOWED_CHAT_ROLES = {UserRole.DOCTOR.value, UserRole.HOSPITAL_OWNER.value}
+ALLOWED_CHAT_ROLES = {UserRole.PATIENT.value, UserRole.DOCTOR.value, UserRole.HOSPITAL_OWNER.value}
 
 
 def verify_chat_access(current_user: dict = Depends(get_hospital_scope)) -> dict:
-    """Ensure authenticated user is a DOCTOR or HOSPITAL_OWNER."""
+    """Ensure authenticated user has a valid role for AI assistant access."""
     role = current_user.get("role")
     if role not in ALLOWED_CHAT_ROLES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Schedule assistant chatbot is only accessible to Doctors and Hospital Owners.",
+            detail="AI assistant chatbot is accessible to Patients, Doctors, and Hospital Owners.",
         )
     return current_user
 

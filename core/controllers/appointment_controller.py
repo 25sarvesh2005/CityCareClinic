@@ -154,6 +154,7 @@ class AppointmentController:
             reason=saved.reason,
             temperature=saved.temperature,
             symptoms=[s.value for s in saved.symptoms],
+            status=saved.status.value if hasattr(saved.status, "value") else str(saved.status or "pending"),
             is_cancelled=saved.is_cancelled,
             created_at=saved.created_at.isoformat(),
             message="Appointment booked successfully.",
@@ -176,21 +177,30 @@ class AppointmentController:
         # ownership filter.
         appointments = await find_all_appointments_by_patient(engine, patient_id)
 
-        return [
-            AppointmentResponse(
-                appointment_id=str(app.id),
-                patient_name=app.patient_name,
-                date=app.date,
-                slot=app.slot,
-                reason=app.reason,
-                temperature=app.temperature,
-                symptoms=[s.value for s in app.symptoms],
-                is_cancelled=app.is_cancelled,
-                cancellation_reason=app.cancellation_reason,
-                created_at=app.created_at.isoformat(),
+        from core.cruds.prescription_crud import find_prescription_by_appointment
+
+        results = []
+        for app in appointments:
+            p = await find_prescription_by_appointment(engine, str(app.id))
+            appt_status = app.status.value if hasattr(app.status, "value") else str(app.status or "pending")
+            results.append(
+                AppointmentResponse(
+                    appointment_id=str(app.id),
+                    patient_name=app.patient_name,
+                    date=app.date,
+                    slot=app.slot,
+                    reason=app.reason,
+                    temperature=app.temperature,
+                    symptoms=[s.value for s in app.symptoms],
+                    status=appt_status,
+                    prescription_id=str(p.id) if p else None,
+                    pdf_url=p.pdf_url if p else None,
+                    is_cancelled=app.is_cancelled,
+                    cancellation_reason=app.cancellation_reason,
+                    created_at=app.created_at.isoformat(),
+                )
             )
-            for app in appointments
-        ]
+        return results
 
     async def cancel_appointment(
         self, appointment_id: str, authenticated_user_details: dict

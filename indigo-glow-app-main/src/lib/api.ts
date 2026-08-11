@@ -49,6 +49,9 @@ export type Appointment = {
   reason: string;
   temperature: number;
   symptoms: Symptom[];
+  status?: string;
+  prescription_id?: string;
+  pdf_url?: string;
   is_cancelled: boolean;
   cancellation_reason?: string;
   created_at: string;
@@ -62,6 +65,9 @@ export type DoctorScheduleEntry = {
   reason: string;
   temperature: number;
   symptoms: Symptom[];
+  status?: string;
+  prescription_id?: string;
+  pdf_url?: string;
   is_cancelled: boolean;
   cancellation_reason?: string;
 };
@@ -402,5 +408,83 @@ export const api = {
         created_at: string;
       }[]
     >(`/chat/schedule/sessions/${encodeURIComponent(session_id)}`),
+
+  // ─── Prescription Endpoints ──────────────────────────────────────────
+  acceptAppointment: (appointment_id: string) =>
+    request<{ appointment_id: string; status: string; message: string }>(
+      `/doctor/appointments/${appointment_id}/accept`,
+      { method: "PATCH" },
+    ),
+
+  rejectAppointment: (appointment_id: string, reason?: string) =>
+    request<{ appointment_id: string; status: string; message: string }>(
+      `/doctor/appointments/${appointment_id}/reject`,
+      { method: "PATCH", body: { reason } },
+    ),
+
+  createPrescription: (payload: {
+    appointment_id: string;
+    diagnosis: string;
+    medications: {
+      medicine_name: string;
+      dosage: string;
+      frequency: string;
+      duration: string;
+      instructions?: string;
+    }[];
+    notes?: string;
+    follow_up_date?: string;
+  }) => request<Prescription>("/doctor/prescriptions", { method: "POST", body: payload }),
+
+  myPrescriptions: () => request<Prescription[]>("/patient/prescriptions"),
+
+  getPrescriptionDetails: (prescription_id: string) =>
+    request<Prescription>(`/patient/prescriptions/${prescription_id}`),
+
+  getPrescriptionPdfUrl: (prescription_id: string) => {
+    const backendOrigin = API_BASE_URL.replace(/\/api\/v1\/?$/, "");
+    return `${backendOrigin}/api/v1/patient/prescriptions/${prescription_id}/pdf-file`;
+  },
+
+  getPdfUrl: (pdf_url?: string | null, prescription_id?: string | null) => {
+    const backendOrigin = API_BASE_URL.replace(/\/api\/v1\/?$/, "");
+    if (pdf_url) {
+      if (pdf_url.startsWith("http://") || pdf_url.startsWith("https://")) {
+        return pdf_url;
+      }
+      if (pdf_url.startsWith("/")) {
+        return `${backendOrigin}${pdf_url}`;
+      }
+    }
+    if (prescription_id) {
+      return `${backendOrigin}/api/v1/patient/prescriptions/${prescription_id}/pdf-file`;
+    }
+    return "#";
+  },
+};
+
+export type MedicationItem = {
+  medicine_name: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  instructions?: string;
+};
+
+export type Prescription = {
+  prescription_id: string;
+  hospital_id: string;
+  doctor_id: string;
+  doctor_name: string;
+  patient_id: string;
+  patient_name: string;
+  appointment_id: string;
+  date: string;
+  diagnosis: string;
+  medications: MedicationItem[];
+  notes?: string;
+  follow_up_date?: string;
+  pdf_url: string;
+  created_at: string;
 };
 

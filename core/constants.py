@@ -38,6 +38,25 @@ class UserRole(str, Enum):
     SUPER_ADMIN = "super_admin"
 
 
+class AppointmentStatus(str, Enum):
+    """
+    Enumeration of appointment statuses throughout its lifecycle.
+
+    Values:
+        PENDING   : Patient requested booking, waiting for doctor approval.
+        ACCEPTED  : Doctor accepted appointment request.
+        REJECTED  : Doctor rejected appointment request.
+        COMPLETED : Doctor consultation completed / prescription generated.
+        CANCELLED : Soft-deleted / cancelled booking.
+    """
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
 class Symptom(str, Enum):
     """
     Enumeration of all symptoms the clinic accepts during booking.

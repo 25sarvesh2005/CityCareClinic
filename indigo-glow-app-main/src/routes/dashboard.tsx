@@ -75,6 +75,12 @@ function PatientDashboard() {
     retry: false,
   });
 
+  const prescriptionsQuery = useQuery({
+    queryKey: ["my-prescriptions"],
+    queryFn: api.myPrescriptions,
+    retry: false,
+  });
+
   const cancel = useMutation({
     mutationFn: (id: string) => api.cancelAppointment(id),
     onSuccess: () => {
@@ -194,10 +200,32 @@ function PatientDashboard() {
                         </div>
                       </div>
                     ) : (
-                      <div className="pt-1 flex justify-end">
-                        <Button variant="danger" size="sm" onClick={() => setPendingCancel(a)}>
-                          Cancel Appointment
-                        </Button>
+                      <div className="pt-1 flex flex-wrap items-center justify-between gap-2 border-t border-glass-border/40">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-muted-foreground font-medium">Status:</span>
+                          {a.status === "pending" && <Badge tone="warning">Pending Approval</Badge>}
+                          {a.status === "accepted" && <Badge tone="cyan">Accepted</Badge>}
+                          {a.status === "completed" && <Badge tone="success">Completed</Badge>}
+                          {a.status === "rejected" && <Badge tone="danger">Declined</Badge>}
+                          {(!a.status || a.status === "active") && <Badge tone="success">Active</Badge>}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {(a.pdf_url || a.prescription_id || a.status === "completed") && (
+                            <Button
+                              variant="cyan"
+                              size="sm"
+                              onClick={() => window.open(api.getPdfUrl(a.pdf_url, a.prescription_id), "_blank")}
+                            >
+                              Download PDF Prescription
+                            </Button>
+                          )}
+                          {a.status !== "completed" && (
+                            <Button variant="danger" size="sm" onClick={() => setPendingCancel(a)}>
+                              Cancel Appointment
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </GlassCard>
@@ -206,68 +234,135 @@ function PatientDashboard() {
             )}
           </div>
 
-          {/* Right Column: Fast Hospital Discovery Widget */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-              <Building2 className="size-5 text-indigo" /> Browse Clinics Nearby
-            </h2>
+          {/* Right Column: My Prescriptions & Fast Clinic Discovery */}
+          <div className="space-y-6">
+            {/* My Prescriptions Widget */}
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <AlertCircle className="size-5 text-cyan" /> My Medical Prescriptions
+              </h2>
 
-            <GlassCard className="space-y-4">
-              <div className="relative">
-                <Search className="absolute left-3.5 top-3 size-4 text-muted-foreground" />
-                <input
-                  className="w-full rounded-full border border-input bg-secondary/40 pl-10 pr-4 py-2 text-xs text-foreground focus:border-cyan/60 focus:outline-none"
-                  placeholder="Filter clinics by city..."
-                  value={cityFilter}
-                  onChange={(e) => setCityFilter(e.target.value)}
-                />
-              </div>
+              <GlassCard className="space-y-3">
+                {prescriptionsQuery.isLoading ? (
+                  <Skeleton className="h-24" />
+                ) : (prescriptionsQuery.data ?? []).length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4">
+                    No medical prescriptions issued yet. Prescriptions will appear here after your doctor accepts and completes your consultation.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {(prescriptionsQuery.data ?? []).map((rx) => (
+                      <div
+                        key={rx.prescription_id}
+                        className="p-3.5 rounded-xl border border-glass-border/60 bg-card/60 hover:border-cyan/50 transition-all space-y-2 text-xs"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <span className="font-bold text-foreground">{rx.diagnosis}</span>
+                            <p className="text-[11px] text-muted-foreground">
+                              {rx.doctor_name} · {rx.date}
+                            </p>
+                          </div>
+                          <Badge tone="success">PDF Ready</Badge>
+                        </div>
 
-              {loadingHospitals ? (
-                <Skeleton className="h-40" />
-              ) : hospitals.length === 0 ? (
-                <div className="text-center py-6 text-xs text-muted-foreground">
-                  No active clinics found.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {hospitals.slice(0, 3).map((h) => (
-                    <div
-                      key={h.hospital_id}
-                      className="p-3 rounded-xl border border-glass-border bg-card/60 hover:border-cyan/50 transition-all space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-semibold text-sm text-foreground">{h.name}</h4>
-                        <span className="text-[10px] text-cyan font-medium flex items-center gap-1">
-                          <MapPin className="size-3" /> {h.city}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground line-clamp-1">{h.address}</p>
-                      <div className="pt-1 flex justify-end">
-                        <Link
-                          to="/hospital-doctors"
-                          search={{ hospital_id: h.hospital_id, hospital_name: h.name }}
-                        >
-                          <Button variant="outline" size="sm" className="text-xs py-1 px-3">
-                            View Doctors <ChevronRight className="size-3 ml-1" />
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {rx.medications.map((m, idx) => (
+                            <span
+                              key={idx}
+                              className="rounded-md bg-cyan/10 text-cyan border border-cyan/20 px-2 py-0.5 text-[10px] font-medium"
+                            >
+                              💊 {m.medicine_name} ({m.dosage})
+                            </span>
+                          ))}
+                        </div>
+
+                        {rx.notes && (
+                          <p className="text-[11px] text-foreground/80 italic bg-secondary/30 rounded-lg p-2 border border-glass-border/40">
+                            "{rx.notes}"
+                          </p>
+                        )}
+
+                        <div className="pt-2 flex justify-end">
+                          <Button
+                            variant="cyan"
+                            size="sm"
+                            className="text-xs py-1 px-3"
+                            onClick={() => window.open(api.getPdfUrl(rx.pdf_url, rx.prescription_id), "_blank")}
+                          >
+                            View / Download PDF
                           </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </GlassCard>
+            </div>
+
+            {/* Fast Hospital Discovery Widget */}
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Building2 className="size-5 text-indigo" /> Browse Clinics Nearby
+              </h2>
+
+              <GlassCard className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-3 size-4 text-muted-foreground" />
+                  <input
+                    className="w-full rounded-full border border-input bg-secondary/40 pl-10 pr-4 py-2 text-xs text-foreground focus:border-cyan/60 focus:outline-none"
+                    placeholder="Filter clinics by city..."
+                    value={cityFilter}
+                    onChange={(e) => setCityFilter(e.target.value)}
+                  />
+                </div>
+
+                {loadingHospitals ? (
+                  <Skeleton className="h-40" />
+                ) : hospitals.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-muted-foreground">
+                    No active clinics found.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {hospitals.slice(0, 3).map((h) => (
+                      <div
+                        key={h.hospital_id}
+                        className="p-3 rounded-xl border border-glass-border bg-card/60 hover:border-cyan/50 transition-all space-y-2"
+                      >
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-semibold text-sm text-foreground">{h.name}</h4>
+                          <span className="text-[10px] text-cyan font-medium flex items-center gap-1">
+                            <MapPin className="size-3" /> {h.city}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground line-clamp-1">{h.address}</p>
+                        <div className="pt-1 flex justify-end">
+                          <Link
+                            to="/hospital-doctors"
+                            search={{ hospital_id: h.hospital_id, hospital_name: h.name }}
+                          >
+                            <Button variant="outline" size="sm" className="text-xs py-1 px-3">
+                              View Doctors <ChevronRight className="size-3 ml-1" />
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
+                    {hospitals.length > 3 && (
+                      <div className="pt-2 text-center">
+                        <Link
+                          to="/hospitals"
+                          className="text-xs text-cyan font-medium hover:underline"
+                        >
+                          View All {hospitals.length} Clinics →
                         </Link>
                       </div>
-                    </div>
-                  ))}
-                  {hospitals.length > 3 && (
-                    <div className="pt-2 text-center">
-                      <Link
-                        to="/hospitals"
-                        className="text-xs text-cyan font-medium hover:underline"
-                      >
-                        View All {hospitals.length} Clinics →
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              )}
-            </GlassCard>
+                    )}
+                  </div>
+                )}
+              </GlassCard>
+            </div>
           </div>
         </div>
       </div>

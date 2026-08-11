@@ -178,5 +178,30 @@ async def execute_tool_call(
 
         return {"hospital_id": hospital_id, "total_doctors": len(doctor_list), "doctors": doctor_list}
 
+    elif tool_name == "search_patient_handbook":
+        query = tool_args.get("query", "")
+        if not query:
+            return {"error": "Missing required argument 'query'."}
+
+        logger.info("Executing RAG handbook search for query: '%s'", query)
+        from chatbot.rag_service import search_handbook
+        result = search_handbook(query=query)
+        return result
+
+    elif tool_name == "search_patient_prescriptions":
+        query = tool_args.get("query", "")
+        if not query:
+            return {"error": "Missing required argument 'query'."}
+
+        # Security scoping: patient can only search their own prescriptions
+        patient_id = current_user.get("user_id") or ""
+        if not patient_id:
+            return {"error": "Unauthorized: Patient identity missing."}
+
+        logger.info("Executing Prescription RAG search for patient '%s' with query: '%s'", patient_id, query)
+        from chatbot.rag_service import search_prescriptions_rag
+        result = search_prescriptions_rag(query=query, patient_id=patient_id)
+        return result
+
     else:
         return {"error": f"Unknown tool: '{tool_name}'"}

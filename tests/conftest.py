@@ -15,6 +15,7 @@ from core.models.user_model import UserModel
 from core.models.appointment_model import AppointmentModel
 from core.models.hospital_model import HospitalModel
 from core.models.doctor_profile_model import DoctorProfileModel
+from core.models.prescription_model import PrescriptionModel
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -22,7 +23,7 @@ async def setup_db():
     """
     Initialize test database connection per test function.
 
-    Cleans all collections (users, appointments, hospitals, doctor_profiles)
+    Cleans all collections (users, appointments, hospitals, doctor_profiles, prescriptions)
     before and after each test so tests are fully isolated. Seeds the default
     doctor and patient accounts after cleanup.
     """
@@ -30,7 +31,7 @@ async def setup_db():
     engine = get_engine()
 
     # Clean all collections before each test run
-    for model in (UserModel, AppointmentModel, HospitalModel, DoctorProfileModel):
+    for model in (UserModel, AppointmentModel, HospitalModel, DoctorProfileModel, PrescriptionModel):
         try:
             await engine.remove(model)
         except Exception:
@@ -42,7 +43,7 @@ async def setup_db():
     yield engine
 
     # Clean up and close connection after test
-    for model in (UserModel, AppointmentModel, HospitalModel, DoctorProfileModel):
+    for model in (UserModel, AppointmentModel, HospitalModel, DoctorProfileModel, PrescriptionModel):
         try:
             await engine.remove(model)
         except Exception:

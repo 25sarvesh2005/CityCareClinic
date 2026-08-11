@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from typing import List
 
 from fastapi import HTTPException, status
 
@@ -16,6 +17,7 @@ from core.constants import DOCTOR_INFO, MAX_BOOKING_DAYS, calculate_free_slots
 from core.cruds.appointment_crud import (
     count_today_appointments,
     count_upcoming_appointments,
+    count_unique_patients,
     find_booked_slots_by_date,
     find_schedule_by_date,
 )
@@ -25,7 +27,6 @@ from core.cruds.doctor_profile_crud import (
     find_profile_by_user_id,
     update_doctor_unavailable_dates,
 )
-from core.cruds.user_crud import count_all_patients
 from core.database.database import get_engine
 from core.models.appointment_model import AppointmentModel
 from core.models.doctor_profile_model import DoctorProfileModel
@@ -114,28 +115,40 @@ class DoctorController:
             )
 
         is_unavailable = False
+        valid_doctor_ids: List[str] = []
         if doctor_user_id:
+            valid_doctor_ids.append(doctor_user_id)
             profile = await find_profile_by_user_id(engine, doctor_user_id)
-            if profile and requested_date in profile.unavailable_dates:
-                is_unavailable = True
+            if profile:
+                valid_doctor_ids.append(str(profile.id))
+                if requested_date in profile.unavailable_dates:
+                    is_unavailable = True
 
         appointments = await find_schedule_by_date(
-            engine, hospital_id, requested_date
+            engine, hospital_id, requested_date, doctor_ids=valid_doctor_ids if valid_doctor_ids else None
         )
 
-        schedule_entries = [
-            ScheduleEntryResponse(
-                appointment_id=str(appointment.id),
-                slot=appointment.slot,
-                patient_name=appointment.patient_name,
-                reason=appointment.reason,
-                temperature=appointment.temperature,
-                symptoms=[symptom.value for symptom in appointment.symptoms],
-                is_cancelled=appointment.is_cancelled,
-                cancellation_reason=appointment.cancellation_reason,
+        from core.cruds.prescription_crud import find_prescription_by_appointment
+
+        schedule_entries = []
+        for appointment in appointments:
+            p = await find_prescription_by_appointment(engine, str(appointment.id))
+            appt_status = appointment.status.value if hasattr(appointment.status, "value") else str(appointment.status or "pending")
+            schedule_entries.append(
+                ScheduleEntryResponse(
+                    appointment_id=str(appointment.id),
+                    slot=appointment.slot,
+                    patient_name=appointment.patient_name,
+                    reason=appointment.reason,
+                    temperature=appointment.temperature,
+                    symptoms=[symptom.value for symptom in appointment.symptoms],
+                    status=appt_status,
+                    prescription_id=str(p.id) if p else None,
+                    pdf_url=p.pdf_url if p else None,
+                    is_cancelled=appointment.is_cancelled,
+                    cancellation_reason=appointment.cancellation_reason,
+                )
             )
-            for appointment in appointments
-        ]
 
         return DoctorScheduleResponse(
             date=requested_date,
@@ -253,18 +266,40 @@ class DoctorController:
             message="Doctor unavailability list retrieved.",
         )
 
-    async def get_stats(self, hospital_id: str = "") -> DoctorStatsResponse:
+    async def get_stats(
+        self, hospital_id: str = "", doctor_user_id: str = ""
+    ) -> DoctorStatsResponse:
         """Calculate clinic stats (total patients, today's visits, upcoming visits)."""
         engine = get_engine()
         today_date_string = date.today().isoformat()
 
-        total_patients = await count_all_patients(engine)
-        todays_visits = await count_today_appointments(
-            engine, hospital_id, today_date_string
-        )
-        upcoming_visits = await count_upcoming_appointments(
-            engine, hospital_id, today_date_string
-        )
+        valid_doctor_ids: List[str] = []
+        if doctor_user_id:
+            valid_doctor_ids.append(doctor_user_id)
+            profile = await find_profile_by_user_id(engine, doctor_user_id)
+            if profile:
+                valid_doctor_ids.append(str(profile.id))
+
+        if valid_doctor_ids:
+            total_patients = await count_unique_patients(
+                engine, hospital_id=hospital_id, doctor_ids=valid_doctor_ids
+            )
+            todays_visits = await count_today_appointments(
+                engine, hospital_id, today_date_string, doctor_ids=valid_doctor_ids
+            )
+            upcoming_visits = await count_upcoming_appointments(
+                engine, hospital_id, today_date_string, doctor_ids=valid_doctor_ids
+            )
+        else:
+            total_patients = await count_unique_patients(
+                engine, hospital_id=hospital_id
+            )
+            todays_visits = await count_today_appointments(
+                engine, hospital_id, today_date_string
+            )
+            upcoming_visits = await count_upcoming_appointments(
+                engine, hospital_id, today_date_string
+            )
 
         return DoctorStatsResponse(
             total_registered_patients=total_patients,
