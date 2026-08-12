@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useSearch, createFileRoute } from "@tanstack/react-router";
 import { Building2, MapPin, Phone, Search, Stethoscope, ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { RoleGuard } from "@/components/RoleGuard";
 import { useToast } from "@/components/Toaster";
 import { Badge, Button, GlassCard, Skeleton } from "@/components/ui-kit";
 import { api, type Hospital } from "@/lib/api";
@@ -11,7 +12,11 @@ export const Route = createFileRoute("/hospitals")({
     const city = search["city"] as string | undefined;
     return city ? { city } : {};
   },
-  component: PatientHospitalsPage,
+  component: () => (
+    <RoleGuard role="patient">
+      <PatientHospitalsPage />
+    </RoleGuard>
+  ),
 });
 
 function PatientHospitalsPage() {
@@ -21,21 +26,21 @@ function PatientHospitalsPage() {
   const [searchQuery, setSearchQuery] = useState(search.city || "");
   const toast = useToast();
 
-  async function loadHospitals() {
+  const loadHospitals = useCallback(async () => {
     setLoading(true);
     try {
       const list = await api.browseHospitals();
       setHospitals(list);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to load hospitals");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to load hospitals");
     } finally {
       setLoading(false);
     }
-  }
+  }, [toast]);
 
   useEffect(() => {
     loadHospitals();
-  }, []);
+  }, [loadHospitals]);
 
   const filteredHospitals = hospitals.filter((h) => {
     if (!searchQuery.trim()) return true;

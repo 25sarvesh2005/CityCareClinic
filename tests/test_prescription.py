@@ -167,9 +167,32 @@ async def test_create_prescription_and_pdf_generation(async_client, booking_cont
 
 
 @pytest.mark.asyncio
-async def test_prescription_rag_ingestion_and_search(setup_db):
-    """Test ingestion of prescription records into RAG vector store and patient search."""
-    from chatbot.rag_service import ingest_prescription_doc, search_prescriptions_rag
+async def test_prescription_rag_ingestion_and_search(setup_db, monkeypatch):
+    """Test the prescription RAG contract without sending medical data to an external embedding API."""
+    import chatbot.rag_service as rag_service
+
+    class LocalVectorStore:
+        """Small in-memory stand-in that exercises CityCare's RAG integration boundary."""
+
+        def __init__(self):
+            self.documents = []
+
+        def add_documents(self, documents):
+            self.documents.extend(documents)
+            return [str(index) for index, _ in enumerate(documents)]
+
+        def similarity_search_with_score(self, _query, k, filter=None):
+            matches = self.documents
+            if filter:
+                matches = [
+                    document
+                    for document in matches
+                    if all(document.metadata.get(key) == value for key, value in filter.items())
+                ]
+            return [(document, 0.0) for document in matches[:k]]
+
+    local_vector_store = LocalVectorStore()
+    monkeypatch.setattr(rag_service, "get_vector_store", lambda: local_vector_store)
 
     engine = setup_db
     p_model = PrescriptionModel(
@@ -198,9 +221,13 @@ async def test_prescription_rag_ingestion_and_search(setup_db):
     saved = await engine.save(p_model)
 
     # Ingest into RAG pipeline
-    success = ingest_prescription_doc(saved)
+    success = rag_service.ingest_prescription_doc(saved)
     assert success is True
 
     # Search RAG pipeline scoped to patient_id
-    search_res = search_prescriptions_rag(query="migraine headache medicine dosage", patient_id="patient_test_user_123")
+    search_res = rag_service.search_prescriptions_rag(
+        query="migraine headache medicine dosage", patient_id="patient_test_user_123"
+    )
     assert search_res["patient_id"] == "patient_test_user_123"
+    assert search_res["total_results"] == 1
+    assert "Sumatriptan 50mg" in search_res["context"]

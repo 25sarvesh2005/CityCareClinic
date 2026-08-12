@@ -146,7 +146,11 @@ export function AestheticDatePicker({
               <span
                 className={cn(
                   "text-base sm:text-lg font-bold tracking-tight mt-0.5",
-                  isSelected ? "text-white" : isOff ? "text-destructive font-extrabold" : "text-foreground",
+                  isSelected
+                    ? "text-white"
+                    : isOff
+                      ? "text-destructive font-extrabold"
+                      : "text-foreground",
                 )}
               >
                 {format(dayDate, "dd")}

@@ -5,13 +5,15 @@ import {
   Building2,
   Calendar,
   Clock,
+  FileText,
   MapPin,
-  Phone,
+  Pill,
   Search,
   ChevronRight,
-  AlertCircle,
   AlertTriangle,
-  XCircle,
+  Stethoscope,
+  Sparkles,
+  type LucideIcon,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { RoleGuard } from "@/components/RoleGuard";
@@ -46,6 +48,45 @@ function formatSlotDisplay(slot: string) {
   return `${h}:${mStr} ${ampm}`;
 }
 
+function DashboardStatCard({
+  icon: Icon,
+  label,
+  value,
+  detail,
+  tone = "cyan",
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string | number;
+  detail: string;
+  tone?: "cyan" | "indigo" | "success";
+}) {
+  return (
+    <div className="rounded-2xl border border-glass-border bg-card/75 p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {label}
+          </p>
+          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">{value}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
+        </div>
+        <span
+          className={`flex size-10 shrink-0 items-center justify-center rounded-xl border ${
+            tone === "indigo"
+              ? "border-indigo/15 bg-indigo/10 text-indigo"
+              : tone === "success"
+                ? "border-success/15 bg-success/10 text-success"
+                : "border-cyan/15 bg-cyan/10 text-cyan"
+          }`}
+        >
+          <Icon className="size-5" />
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function PatientDashboard() {
   const toast = useToast();
   const qc = useQueryClient();
@@ -58,16 +99,16 @@ function PatientDashboard() {
   useEffect(() => {
     async function load() {
       try {
-        const list = await api.browseHospitals(cityFilter);
-        setHospitals(list);
-      } catch (err) {
-        console.error(err);
+        const res = await api.browseHospitals();
+        setHospitals(res);
+      } catch (err: unknown) {
+        toast.error("Failed to load clinics", (err as ApiError).message);
       } finally {
         setLoadingHospitals(false);
       }
     }
     load();
-  }, [cityFilter]);
+  }, [toast]);
 
   const apptQuery = useQuery({
     queryKey: ["my-appointments"],
@@ -91,36 +132,78 @@ function PatientDashboard() {
     onError: (err) => toast.error("Couldn't cancel appointment", (err as ApiError).message),
   });
 
+  const appointments = apptQuery.data ?? [];
+  const prescriptions = prescriptionsQuery.data ?? [];
+  const activeAppointments = appointments.filter(
+    (a) => !a.is_cancelled && a.status !== "completed" && a.status !== "rejected",
+  ).length;
+  const completedVisits = appointments.filter((a) => a.status === "completed").length;
+  const latestPrescription = prescriptions[0];
+
   return (
     <AppShell>
-      <div className="animate-rise space-y-8">
+      <div className="animate-rise space-y-7">
         {/* Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass-border pb-6">
+        <div className="flex flex-col justify-between gap-4 rounded-2xl border border-glass-border bg-card/80 p-5 shadow-sm sm:flex-row sm:items-center">
           <div>
-            <span className="text-xs font-semibold uppercase tracking-wider text-cyan">
-              Patient Hub
+            <span className="inline-flex rounded-lg border border-cyan/15 bg-cyan/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-cyan">
+              Patient workspace
             </span>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">
-              My Appointments & Clinics
+            <h1 className="mt-3 text-3xl font-bold tracking-tight text-foreground">
+              My care dashboard
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Book specialist consultations across accredited hospital tenants and manage your
-              visits.
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Track consultations, prescriptions, and nearby CityCare clinics from one focused
+              patient view.
             </p>
           </div>
-          <Link to="/hospitals">
-            <Button variant="primary" size="sm">
-              <Building2 className="size-4" /> Browse All Clinics
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link to="/prescription-ai">
+              <Button variant="primary" size="sm" className="bg-gradient-to-r from-cyan to-indigo text-white shadow-sm border-none gap-1.5">
+                <Sparkles className="size-4 text-cyan-200" /> Prescription AI Workspace
+              </Button>
+            </Link>
+            <Link to="/hospitals">
+              <Button variant="outline" size="sm">
+                <Building2 className="size-4" /> Browse clinics
+              </Button>
+            </Link>
+          </div>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-[1.3fr_1fr]">
+        <div className="grid gap-3 md:grid-cols-3">
+          <DashboardStatCard
+            icon={Calendar}
+            label="Active bookings"
+            value={activeAppointments}
+            detail={`${completedVisits} completed visit${completedVisits === 1 ? "" : "s"}`}
+            tone="cyan"
+          />
+          <DashboardStatCard
+            icon={FileText}
+            label="Prescriptions"
+            value={prescriptions.length}
+            detail={latestPrescription ? `Latest: ${latestPrescription.date}` : "No records yet"}
+            tone="indigo"
+          />
+          <DashboardStatCard
+            icon={Stethoscope}
+            label="Clinic network"
+            value={loadingHospitals ? "..." : hospitals.length}
+            detail={cityFilter ? `Filtered by ${cityFilter}` : "Available clinics"}
+            tone="success"
+          />
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
           {/* Left Column: My Booked Appointments */}
           <div className="space-y-4">
-            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-              <Calendar className="size-5 text-cyan" /> My Booked Appointments
-            </h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                <Calendar className="size-5 text-cyan" /> Booked appointments
+              </h2>
+              <Badge tone="muted">{appointments.length} total</Badge>
+            </div>
 
             {apptQuery.isLoading ? (
               <div className="space-y-3">
@@ -128,29 +211,29 @@ function PatientDashboard() {
                 <Skeleton className="h-28" />
               </div>
             ) : apptQuery.isError ? (
-              <GlassCard className="text-center py-6">
+              <GlassCard className="py-6 text-center">
                 <p className="text-sm text-destructive font-medium">
                   {(apptQuery.error as ApiError).message}
                 </p>
               </GlassCard>
-            ) : (apptQuery.data ?? []).length === 0 ? (
-              <GlassCard className="text-center py-10 space-y-3">
+            ) : appointments.length === 0 ? (
+              <GlassCard className="space-y-3 py-10 text-center">
                 <Calendar className="mx-auto size-10 text-muted-foreground/50" />
-                <h3 className="text-base font-semibold text-foreground">No Booked Appointments</h3>
-                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                  You haven't reserved any consultation slots yet. Explore our verified hospital
-                  network to book a doctor.
+                <h3 className="text-base font-semibold text-foreground">No appointments yet</h3>
+                <p className="mx-auto max-w-sm text-xs text-muted-foreground">
+                  Explore the CityCare clinic network and reserve a consultation slot with a
+                  specialist.
                 </p>
                 <Link to="/hospitals">
                   <Button variant="outline" size="sm">
-                    Find a Specialist <ChevronRight className="size-4 ml-1" />
+                    Find a specialist <ChevronRight className="ml-1 size-4" />
                   </Button>
                 </Link>
               </GlassCard>
             ) : (
-              <div className="space-y-4">
-                {(apptQuery.data ?? []).map((a) => (
-                  <GlassCard key={a.appointment_id} className="lift space-y-3">
+              <div className="space-y-3">
+                {appointments.map((a) => (
+                  <GlassCard key={a.appointment_id} className="lift space-y-4 border-border/60">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2 text-sm font-bold text-foreground">
@@ -165,11 +248,11 @@ function PatientDashboard() {
                         </p>
                       </div>
                       <Badge tone={a.is_cancelled ? "danger" : "success"}>
-                        {a.is_cancelled ? "Cancelled" : "Active Booking"}
+                        {a.is_cancelled ? "Cancelled" : "Active booking"}
                       </Badge>
                     </div>
 
-                    <div className="text-xs text-muted-foreground space-y-1 bg-secondary/30 p-3 rounded-xl border border-glass-border">
+                    <div className="space-y-1 rounded-xl border border-glass-border bg-muted/35 p-3 text-xs text-muted-foreground">
                       <p>
                         <span className="font-medium text-foreground">Symptoms:</span>{" "}
                         {a.symptoms.map((s) => SYMPTOM_LABELS[s]).join(", ")}
@@ -193,8 +276,7 @@ function PatientDashboard() {
                         <div className="pt-1">
                           <Link to="/hospitals">
                             <Button variant="primary" size="sm" className="text-xs h-8 py-1 px-3">
-                              Find Clinic to Reschedule{" "}
-                              <ChevronRight className="size-3.5 ml-1" />
+                              Reschedule <ChevronRight className="ml-1 size-3.5" />
                             </Button>
                           </Link>
                         </div>
@@ -207,7 +289,9 @@ function PatientDashboard() {
                           {a.status === "accepted" && <Badge tone="cyan">Accepted</Badge>}
                           {a.status === "completed" && <Badge tone="success">Completed</Badge>}
                           {a.status === "rejected" && <Badge tone="danger">Declined</Badge>}
-                          {(!a.status || a.status === "active") && <Badge tone="success">Active</Badge>}
+                          {(!a.status || a.status === "active") && (
+                            <Badge tone="success">Active</Badge>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -215,9 +299,11 @@ function PatientDashboard() {
                             <Button
                               variant="cyan"
                               size="sm"
-                              onClick={() => window.open(api.getPdfUrl(a.pdf_url, a.prescription_id), "_blank")}
+                              onClick={() =>
+                                window.open(api.getPdfUrl(a.pdf_url, a.prescription_id), "_blank")
+                              }
                             >
-                              Download PDF Prescription
+                              Download prescription
                             </Button>
                           )}
                           {a.status !== "completed" && (
@@ -238,59 +324,69 @@ function PatientDashboard() {
           <div className="space-y-6">
             {/* My Prescriptions Widget */}
             <div className="space-y-4">
-              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                <AlertCircle className="size-5 text-cyan" /> My Medical Prescriptions
-              </h2>
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                  <FileText className="size-5 text-indigo" /> Prescriptions
+                </h2>
+                <Badge tone="muted">{prescriptions.length} records</Badge>
+              </div>
 
-              <GlassCard className="space-y-3">
+              <GlassCard className="space-y-3 border-border/60">
                 {prescriptionsQuery.isLoading ? (
                   <Skeleton className="h-24" />
-                ) : (prescriptionsQuery.data ?? []).length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-4">
-                    No medical prescriptions issued yet. Prescriptions will appear here after your doctor accepts and completes your consultation.
+                ) : prescriptions.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-muted-foreground">
+                    No medical prescriptions issued yet. Prescriptions will appear here after your
+                    doctor accepts and completes your consultation.
                   </p>
                 ) : (
                   <div className="space-y-3">
-                    {(prescriptionsQuery.data ?? []).map((rx) => (
+                    {prescriptions.map((rx) => (
                       <div
                         key={rx.prescription_id}
-                        className="p-3.5 rounded-xl border border-glass-border/60 bg-card/60 hover:border-cyan/50 transition-all space-y-2 text-xs"
+                        className="space-y-3 rounded-xl border border-glass-border/70 bg-background/45 p-4 text-xs transition-all hover:border-cyan/45"
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <div>
-                            <span className="font-bold text-foreground">{rx.diagnosis}</span>
+                          <div className="min-w-0">
+                            <span className="block truncate text-sm font-bold text-foreground">
+                              {rx.diagnosis}
+                            </span>
                             <p className="text-[11px] text-muted-foreground">
                               {rx.doctor_name} · {rx.date}
                             </p>
                           </div>
-                          <Badge tone="success">PDF Ready</Badge>
+                          <Badge tone="success">PDF ready</Badge>
                         </div>
 
-                        <div className="flex flex-wrap gap-1 pt-1">
+                        <div className="flex flex-wrap gap-1.5">
                           {rx.medications.map((m, idx) => (
                             <span
                               key={idx}
-                              className="rounded-md bg-cyan/10 text-cyan border border-cyan/20 px-2 py-0.5 text-[10px] font-medium"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-cyan/15 bg-cyan/10 px-2.5 py-1 text-[11px] font-medium text-foreground"
                             >
-                              💊 {m.medicine_name} ({m.dosage})
+                              <Pill className="size-3 text-cyan" />
+                              {m.medicine_name} ({m.dosage})
                             </span>
                           ))}
                         </div>
 
                         {rx.notes && (
-                          <p className="text-[11px] text-foreground/80 italic bg-secondary/30 rounded-lg p-2 border border-glass-border/40">
-                            "{rx.notes}"
+                          <p className="rounded-lg border border-glass-border/50 bg-muted/35 p-2.5 text-[11px] leading-relaxed text-foreground/80">
+                            <span className="font-semibold text-foreground">Doctor note:</span>{" "}
+                            {rx.notes}
                           </p>
                         )}
 
-                        <div className="pt-2 flex justify-end">
+                        <div className="flex justify-end pt-1">
                           <Button
-                            variant="cyan"
+                            variant="outline"
                             size="sm"
                             className="text-xs py-1 px-3"
-                            onClick={() => window.open(api.getPdfUrl(rx.pdf_url, rx.prescription_id), "_blank")}
+                            onClick={() =>
+                              window.open(api.getPdfUrl(rx.pdf_url, rx.prescription_id), "_blank")
+                            }
                           >
-                            View / Download PDF
+                            View PDF
                           </Button>
                         </div>
                       </div>
@@ -302,15 +398,20 @@ function PatientDashboard() {
 
             {/* Fast Hospital Discovery Widget */}
             <div className="space-y-4">
-              <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                <Building2 className="size-5 text-indigo" /> Browse Clinics Nearby
-              </h2>
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                  <Building2 className="size-5 text-cyan" /> Nearby clinics
+                </h2>
+                <Badge tone="muted">
+                  {loadingHospitals ? "Loading" : `${hospitals.length} found`}
+                </Badge>
+              </div>
 
-              <GlassCard className="space-y-4">
+              <GlassCard className="space-y-4 border-border/60">
                 <div className="relative">
                   <Search className="absolute left-3.5 top-3 size-4 text-muted-foreground" />
                   <input
-                    className="w-full rounded-full border border-input bg-secondary/40 pl-10 pr-4 py-2 text-xs text-foreground focus:border-cyan/60 focus:outline-none"
+                    className="w-full rounded-xl border border-input bg-background/60 py-2 pl-10 pr-4 text-xs text-foreground transition-colors placeholder:text-muted-foreground/60 focus:border-cyan/60 focus:outline-none focus:ring-2 focus:ring-ring/30"
                     placeholder="Filter clinics by city..."
                     value={cityFilter}
                     onChange={(e) => setCityFilter(e.target.value)}
@@ -320,7 +421,7 @@ function PatientDashboard() {
                 {loadingHospitals ? (
                   <Skeleton className="h-40" />
                 ) : hospitals.length === 0 ? (
-                  <div className="text-center py-6 text-xs text-muted-foreground">
+                  <div className="py-6 text-center text-xs text-muted-foreground">
                     No active clinics found.
                   </div>
                 ) : (
@@ -328,22 +429,26 @@ function PatientDashboard() {
                     {hospitals.slice(0, 3).map((h) => (
                       <div
                         key={h.hospital_id}
-                        className="p-3 rounded-xl border border-glass-border bg-card/60 hover:border-cyan/50 transition-all space-y-2"
+                        className="space-y-2 rounded-xl border border-glass-border/70 bg-background/45 p-3.5 transition-all hover:border-cyan/45"
                       >
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-semibold text-sm text-foreground">{h.name}</h4>
-                          <span className="text-[10px] text-cyan font-medium flex items-center gap-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <h4 className="truncate text-sm font-semibold text-foreground">
+                            {h.name}
+                          </h4>
+                          <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-cyan">
                             <MapPin className="size-3" /> {h.city}
                           </span>
                         </div>
-                        <p className="text-[11px] text-muted-foreground line-clamp-1">{h.address}</p>
-                        <div className="pt-1 flex justify-end">
+                        <p className="line-clamp-1 text-[11px] text-muted-foreground">
+                          {h.address}
+                        </p>
+                        <div className="flex justify-end pt-1">
                           <Link
                             to="/hospital-doctors"
                             search={{ hospital_id: h.hospital_id, hospital_name: h.name }}
                           >
                             <Button variant="outline" size="sm" className="text-xs py-1 px-3">
-                              View Doctors <ChevronRight className="size-3 ml-1" />
+                              View doctors <ChevronRight className="ml-1 size-3" />
                             </Button>
                           </Link>
                         </div>
@@ -353,9 +458,9 @@ function PatientDashboard() {
                       <div className="pt-2 text-center">
                         <Link
                           to="/hospitals"
-                          className="text-xs text-cyan font-medium hover:underline"
+                          className="text-xs font-medium text-cyan hover:underline"
                         >
-                          View All {hospitals.length} Clinics →
+                          View all {hospitals.length} clinics
                         </Link>
                       </div>
                     )}

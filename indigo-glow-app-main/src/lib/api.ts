@@ -409,6 +409,42 @@ export const api = {
       }[]
     >(`/chat/schedule/sessions/${encodeURIComponent(session_id)}`),
 
+  sendPrescriptionChatMessage: (input: { session_id?: string; message: string }) =>
+    request<{
+      session_id: string;
+      response: string;
+      messages: {
+        message_id: string;
+        session_id: string;
+        role: "user" | "assistant" | "system" | "tool";
+        content: string;
+        created_at: string;
+      }[];
+    }>("/chat/prescriptions", { method: "POST", body: input }),
+
+  getPrescriptionChatSessions: () =>
+    request<
+      {
+        session_id: string;
+        user_id: string;
+        hospital_id: string;
+        assistant_type: string;
+        title: string;
+        created_at: string;
+      }[]
+    >("/chat/prescriptions/sessions"),
+
+  getPrescriptionChatMessages: (session_id: string) =>
+    request<
+      {
+        message_id: string;
+        session_id: string;
+        role: "user" | "assistant" | "system" | "tool";
+        content: string;
+        created_at: string;
+      }[]
+    >(`/chat/prescriptions/sessions/${encodeURIComponent(session_id)}`),
+
   // ─── Prescription Endpoints ──────────────────────────────────────────
   acceptAppointment: (appointment_id: string) =>
     request<{ appointment_id: string; status: string; message: string }>(
@@ -490,4 +526,3 @@ export type Prescription = {
   pdf_url: string;
   created_at: string;
 };
-

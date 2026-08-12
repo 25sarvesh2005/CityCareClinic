@@ -14,7 +14,11 @@ logger = get_logger(__name__)
 
 
 async def create_chat_session(
-    engine: AIOEngine, user_id: str, hospital_id: str, title: Optional[str] = None
+    engine: AIOEngine,
+    user_id: str,
+    hospital_id: str,
+    title: Optional[str] = None,
+    assistant_type: str = "schedule",
 ) -> ChatSessionModel:
     """
     Create and persist a new chat session.
@@ -22,6 +26,7 @@ async def create_chat_session(
     session = ChatSessionModel(
         user_id=user_id,
         hospital_id=hospital_id,
+        assistant_type=assistant_type,
         title=title or "Schedule Assistant Session",
     )
     saved = await engine.save(session)
@@ -30,7 +35,10 @@ async def create_chat_session(
 
 
 async def get_chat_session(
-    engine: AIOEngine, session_id: str, user_id: str
+    engine: AIOEngine,
+    session_id: str,
+    user_id: str,
+    assistant_type: Optional[str] = None,
 ) -> Optional[ChatSessionModel]:
     """
     Retrieve a chat session by ID, scoped to user_id for authorization.
@@ -40,24 +48,27 @@ async def get_chat_session(
     except Exception:
         return None
 
-    session = await engine.find_one(
-        ChatSessionModel,
-        (ChatSessionModel.id == obj_id) & (ChatSessionModel.user_id == user_id),
-    )
+    query = (ChatSessionModel.id == obj_id) & (ChatSessionModel.user_id == user_id)
+    if assistant_type:
+        query = query & (ChatSessionModel.assistant_type == assistant_type)
+
+    session = await engine.find_one(ChatSessionModel, query)
     return session
 
 
 async def list_chat_sessions(
-    engine: AIOEngine, user_id: str
+    engine: AIOEngine,
+    user_id: str,
+    assistant_type: Optional[str] = None,
 ) -> List[ChatSessionModel]:
     """
     List all chat sessions for a specific user ordered by created_at descending.
     """
-    sessions = await engine.find(
-        ChatSessionModel,
-        ChatSessionModel.user_id == user_id,
-        sort=ChatSessionModel.created_at.desc(),
-    )
+    query = ChatSessionModel.user_id == user_id
+    if assistant_type:
+        query = query & (ChatSessionModel.assistant_type == assistant_type)
+
+    sessions = await engine.find(ChatSessionModel, query, sort=ChatSessionModel.created_at.desc())
     return list(sessions)
 
 

@@ -15,6 +15,8 @@ import { Route as DoctorRouteImport } from './routes/doctor'
 import { Route as HospitalDoctorsRouteImport } from './routes/hospital-doctors'
 import { Route as HospitalsRouteImport } from './routes/hospitals'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PrescriptionAiRouteImport } from './routes/prescription-ai'
+import { Route as ScheduleAiRouteImport } from './routes/schedule-ai'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as HospitalOwnerDashboardRouteImport } from './routes/hospital-owner/dashboard'
 import { Route as HospitalOwnerDoctorsRouteImport } from './routes/hospital-owner/doctors'
@@ -50,6 +52,16 @@ const HospitalsRoute = HospitalsRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrescriptionAiRoute = PrescriptionAiRouteImport.update({
+  id: '/prescription-ai',
+  path: '/prescription-ai',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScheduleAiRoute = ScheduleAiRouteImport.update({
+  id: '/schedule-ai',
+  path: '/schedule-ai',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -90,6 +102,8 @@ export interface FileRoutesByFullPath {
   '/hospital-doctors': typeof HospitalDoctorsRoute
   '/hospitals': typeof HospitalsRoute
   '/login': typeof LoginRoute
+  '/prescription-ai': typeof PrescriptionAiRoute
+  '/schedule-ai': typeof ScheduleAiRoute
   '/signup': typeof SignupRoute
   '/hospital-owner/dashboard': typeof HospitalOwnerDashboardRoute
   '/hospital-owner/doctors': typeof HospitalOwnerDoctorsRoute
@@ -104,6 +118,8 @@ export interface FileRoutesByTo {
   '/hospital-doctors': typeof HospitalDoctorsRoute
   '/hospitals': typeof HospitalsRoute
   '/login': typeof LoginRoute
+  '/prescription-ai': typeof PrescriptionAiRoute
+  '/schedule-ai': typeof ScheduleAiRoute
   '/signup': typeof SignupRoute
   '/hospital-owner/dashboard': typeof HospitalOwnerDashboardRoute
   '/hospital-owner/doctors': typeof HospitalOwnerDoctorsRoute
@@ -119,6 +135,8 @@ export interface FileRoutesById {
   '/hospital-doctors': typeof HospitalDoctorsRoute
   '/hospitals': typeof HospitalsRoute
   '/login': typeof LoginRoute
+  '/prescription-ai': typeof PrescriptionAiRoute
+  '/schedule-ai': typeof ScheduleAiRoute
   '/signup': typeof SignupRoute
   '/hospital-owner/dashboard': typeof HospitalOwnerDashboardRoute
   '/hospital-owner/doctors': typeof HospitalOwnerDoctorsRoute
@@ -135,6 +153,8 @@ export interface FileRouteTypes {
     | '/hospital-doctors'
     | '/hospitals'
     | '/login'
+    | '/prescription-ai'
+    | '/schedule-ai'
     | '/signup'
     | '/hospital-owner/dashboard'
     | '/hospital-owner/doctors'
@@ -149,6 +169,8 @@ export interface FileRouteTypes {
     | '/hospital-doctors'
     | '/hospitals'
     | '/login'
+    | '/prescription-ai'
+    | '/schedule-ai'
     | '/signup'
     | '/hospital-owner/dashboard'
     | '/hospital-owner/doctors'
@@ -163,6 +185,8 @@ export interface FileRouteTypes {
     | '/hospital-doctors'
     | '/hospitals'
     | '/login'
+    | '/prescription-ai'
+    | '/schedule-ai'
     | '/signup'
     | '/hospital-owner/dashboard'
     | '/hospital-owner/doctors'
@@ -178,6 +202,8 @@ export interface RootRouteChildren {
   HospitalDoctorsRoute: typeof HospitalDoctorsRoute
   HospitalsRoute: typeof HospitalsRoute
   LoginRoute: typeof LoginRoute
+  PrescriptionAiRoute: typeof PrescriptionAiRoute
+  ScheduleAiRoute: typeof ScheduleAiRoute
   SignupRoute: typeof SignupRoute
   HospitalOwnerDashboardRoute: typeof HospitalOwnerDashboardRoute
   HospitalOwnerDoctorsRoute: typeof HospitalOwnerDoctorsRoute
@@ -228,6 +254,20 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/prescription-ai': {
+      id: '/prescription-ai'
+      path: '/prescription-ai'
+      fullPath: '/prescription-ai'
+      preLoaderRoute: typeof PrescriptionAiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/schedule-ai': {
+      id: '/schedule-ai'
+      path: '/schedule-ai'
+      fullPath: '/schedule-ai'
+      preLoaderRoute: typeof ScheduleAiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -282,6 +322,8 @@ const rootRouteChildren: RootRouteChildren = {
   HospitalDoctorsRoute: HospitalDoctorsRoute,
   HospitalsRoute: HospitalsRoute,
   LoginRoute: LoginRoute,
+  PrescriptionAiRoute: PrescriptionAiRoute,
+  ScheduleAiRoute: ScheduleAiRoute,
   SignupRoute: SignupRoute,
   HospitalOwnerDashboardRoute: HospitalOwnerDashboardRoute,
   HospitalOwnerDoctorsRoute: HospitalOwnerDoctorsRoute,

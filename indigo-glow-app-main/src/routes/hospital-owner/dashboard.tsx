@@ -12,11 +12,11 @@ import {
   Stethoscope,
   CalendarOff,
   UserCheck,
+  Sparkles,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { RoleGuard } from "@/components/RoleGuard";
 import { AestheticDatePicker } from "@/components/AestheticDatePicker";
-import { ScheduleChatBot } from "@/components/chatbot/ScheduleChatBot";
 import { Badge, Button, GlassCard, Skeleton } from "@/components/ui-kit";
 import { api, type HospitalStats, type DoctorProfile } from "@/lib/api";
 
@@ -29,7 +29,6 @@ function HospitalOwnerDashboard() {
     <RoleGuard role="hospital_owner">
       <AppShell>
         <DashboardContent />
-        <ScheduleChatBot />
       </AppShell>
     </RoleGuard>
   );
@@ -87,7 +86,8 @@ function DashboardContent() {
 
   // Breakdown for selected date
   const unavailableDoctorsCount = useMemo(() => {
-    return displayedDoctors.filter((d) => (d.unavailable_dates || []).includes(selectedDate)).length;
+    return displayedDoctors.filter((d) => (d.unavailable_dates || []).includes(selectedDate))
+      .length;
   }, [displayedDoctors, selectedDate]);
 
   const availableDoctorsCount = displayedDoctors.length - unavailableDoctorsCount;
@@ -108,8 +108,13 @@ function DashboardContent() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Link to="/schedule-ai">
+            <Button variant="primary" size="sm" className="bg-gradient-to-r from-indigo to-cyan text-white shadow-sm border-none gap-1.5">
+              <Sparkles className="size-4 text-cyan-200" /> Schedule AI Workspace
+            </Button>
+          </Link>
           <Link to="/hospital-owner/doctors">
-            <Button variant="primary" size="sm">
+            <Button variant="outline" size="sm">
               <Users className="size-4" /> Manage Doctors
             </Button>
           </Link>
@@ -201,7 +206,8 @@ function DashboardContent() {
               <Calendar className="size-5 text-cyan" /> Doctor Off-Day & Schedule Analyzer
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Inspect individual doctor off-days, date-wise availability rosters, and schedule status.
+              Inspect individual doctor off-days, date-wise availability rosters, and schedule
+              status.
             </p>
           </div>
 
@@ -238,7 +244,9 @@ function DashboardContent() {
           selectedDate={selectedDate}
           onDateChange={(newDate) => setSelectedDate(newDate)}
           unavailableDates={offDatesForPicker}
-          label={activeDoctor ? `${activeDoctor.name || "Doctor"}'s Schedule` : "Staff Schedule Date"}
+          label={
+            activeDoctor ? `${activeDoctor.name || "Doctor"}'s Schedule` : "Staff Schedule Date"
+          }
         />
 
         {/* Doctor Availability List for Selected Date */}
@@ -284,9 +292,7 @@ function DashboardContent() {
                       <div className="flex items-center gap-3">
                         <span
                           className={`flex size-10 items-center justify-center rounded-xl ${
-                            isOff
-                              ? "bg-destructive/20 text-destructive"
-                              : "bg-cyan/15 text-cyan"
+                            isOff ? "bg-destructive/20 text-destructive" : "bg-cyan/15 text-cyan"
                           }`}
                         >
                           {isOff ? (
@@ -296,7 +302,9 @@ function DashboardContent() {
                           )}
                         </span>
                         <div>
-                          <h4 className="font-bold text-sm text-foreground">{d.name || "Doctor"}</h4>
+                          <h4 className="font-bold text-sm text-foreground">
+                            {d.name || "Doctor"}
+                          </h4>
                           <span className="text-xs text-cyan font-medium">{d.specialization}</span>
                         </div>
                       </div>
@@ -313,7 +321,9 @@ function DashboardContent() {
                     {/* Individual Off-Days List per Doctor */}
                     <div className="rounded-xl border border-glass-border/40 bg-secondary/20 p-2.5 text-xs space-y-1.5">
                       <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-semibold text-foreground">Doctor's Individual Off-Days:</span>
+                        <span className="font-semibold text-foreground">
+                          Doctor's Individual Off-Days:
+                        </span>
                         <span className="text-muted-foreground font-mono">
                           {(d.unavailable_dates || []).length} Total
                         </span>
@@ -342,11 +352,13 @@ function DashboardContent() {
 
                     <div className="pt-1 text-xs text-muted-foreground space-y-1">
                       <p>
-                        <span className="font-medium text-foreground">Fee:</span> {d.consultation_fee}
+                        <span className="font-medium text-foreground">Fee:</span>{" "}
+                        {d.consultation_fee}
                       </p>
                       {isOff ? (
                         <p className="text-destructive font-medium bg-destructive/10 p-2 rounded-lg border border-destructive/20 mt-1">
-                          ⚠️ Marked unavailable on {selectedDate} in physician portal. Patient booking is disabled.
+                          ⚠️ Marked unavailable on {selectedDate} in physician portal. Patient
+                          booking is disabled.
                         </p>
                       ) : (
                         <p className="text-foreground/80">

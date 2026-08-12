@@ -13,13 +13,78 @@ import pytest
 import pytest_asyncio
 from bson import ObjectId
 
+from chatbot.gemini_client import (
+    GEMINI_NOT_CONFIGURED_RESPONSE,
+    GEMINI_UNAVAILABLE_RESPONSE,
+    run_chat_completion,
+)
 from chatbot.tools import execute_tool_call
 from common.auth import create_access_token, hash_password
 from core.constants import UserRole
 from core.models.appointment_model import AppointmentModel
 from core.models.doctor_profile_model import DoctorProfileModel
 from core.models.hospital_model import HospitalModel
+from core.models.prescription_model import PrescriptionModel
 from core.models.user_model import UserModel
+
+
+@pytest.mark.asyncio
+async def test_schedule_assistant_requires_gemini_api_key(monkeypatch, setup_db):
+    """Schedule assistant is strict Gemini-only and does not use local fallback."""
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    result = await run_chat_completion(
+        engine=setup_db,
+        current_user={
+            "user_id": str(ObjectId()),
+            "email": "doctor@example.com",
+            "role": "doctor",
+            "hospital_id": str(ObjectId()),
+            "name": "Dr. Test",
+        },
+        messages_history=[],
+        user_prompt="Show my schedule today",
+    )
+
+    assert result == GEMINI_NOT_CONFIGURED_RESPONSE
+
+
+@pytest.mark.asyncio
+async def test_schedule_assistant_hides_raw_gemini_network_errors(monkeypatch, setup_db):
+    """Raw socket/Windows errors should never be shown in the chat bubble."""
+
+    class BrokenModels:
+        def generate_content(self, **_):
+            raise OSError(
+                "[WinError 10013] An attempt was made to access a socket in a way "
+                "forbidden by its access permissions"
+            )
+
+    class BrokenGeminiClient:
+        models = BrokenModels()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-gemini-key")
+    monkeypatch.setattr(
+        "chatbot.gemini_client.get_gemini_client",
+        lambda: BrokenGeminiClient(),
+    )
+
+    result = await run_chat_completion(
+        engine=setup_db,
+        current_user={
+            "user_id": str(ObjectId()),
+            "email": "doctor@example.com",
+            "role": "doctor",
+            "hospital_id": str(ObjectId()),
+            "name": "Dr. Test",
+        },
+        messages_history=[],
+        user_prompt="Show my schedule today",
+    )
+
+    assert result == GEMINI_UNAVAILABLE_RESPONSE
+    assert "WinError" not in result
+    assert "socket" not in result.casefold()
 
 
 @pytest.mark.asyncio
@@ -252,3 +317,244 @@ async def test_chat_schedule_endpoint_and_sessions(async_client, booking_context
     msgs_list = msgs_resp.json()
     assert len(msgs_list) >= 2
     assert msgs_list[0]["role"] == "user"
+
+
+@pytest.mark.asyncio
+async def test_patient_prescription_chat_endpoint_uses_patient_identity(
+    async_client,
+    setup_db,
+    monkeypatch,
+):
+    """Prescription chat reads stored records for the JWT patient only."""
+    engine = setup_db
+    monkeypatch.setattr(
+        "chatbot.prescription_assistant.search_prescriptions_rag",
+        lambda **_: (_ for _ in ()).throw(AssertionError("Web chat must not call RAG embeddings")),
+    )
+    monkeypatch.setattr(
+        "chatbot.prescription_assistant._generate_grounded_answer",
+        lambda *_: (_ for _ in ()).throw(RuntimeError("Gemini unavailable")),
+    )
+
+    signup = await async_client.post(
+        "/api/v1/signup",
+        json={
+            "name": "Prescription Chat Patient",
+            "email": "prescription.chat.patient@example.com",
+            "password": "Password123!",
+        },
+    )
+    assert signup.status_code == 201, signup.text
+    patient_id = signup.json()["user_id"]
+
+    await engine.save(
+        PrescriptionModel(
+            hospital_id=str(ObjectId()),
+            doctor_id=str(ObjectId()),
+            doctor_name="Dr. Prescription",
+            patient_id=patient_id,
+            patient_name="Prescription Chat Patient",
+            appointment_id=str(ObjectId()),
+            date="2026-08-12",
+            diagnosis="Viral fever",
+            medications=[
+                {
+                    "medicine_name": "Paracetamol",
+                    "dosage": "500mg",
+                    "frequency": "1-0-1 after meals",
+                    "duration": "3 days",
+                    "instructions": "After food",
+                }
+            ],
+            notes="Drink fluids.",
+            follow_up_date="2026-08-19",
+            pdf_url="/api/v1/patient/prescriptions/example/pdf-file",
+        )
+    )
+    await engine.save(
+        PrescriptionModel(
+            hospital_id=str(ObjectId()),
+            doctor_id=str(ObjectId()),
+            doctor_name="Dr. Other",
+            patient_id=str(ObjectId()),
+            patient_name="Other Patient",
+            appointment_id=str(ObjectId()),
+            date="2026-08-12",
+            diagnosis="Other diagnosis",
+            medications=[
+                {
+                    "medicine_name": "Ibuprofen",
+                    "dosage": "400mg",
+                    "frequency": "Once daily",
+                    "duration": "1 day",
+                }
+            ],
+            pdf_url="/api/v1/patient/prescriptions/other/pdf-file",
+        )
+    )
+
+    login = await async_client.post(
+        "/api/v1/login",
+        json={
+            "email": "prescription.chat.patient@example.com",
+            "password": "Password123!",
+        },
+    )
+    assert login.status_code == 200, login.text
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    chat_resp = await async_client.post(
+        "/api/v1/chat/prescriptions",
+        json={"message": "What medicines are documented for me?"},
+        headers=headers,
+    )
+
+    assert chat_resp.status_code == 200, chat_resp.text
+    body = chat_resp.json()
+    session_id = body["session_id"]
+    assert body["messages"][-1]["role"] == "assistant"
+    assistant_content = body["messages"][-1]["content"]
+    assert "Paracetamol" in assistant_content
+    assert "Timing: Morning" in assistant_content
+    assert "Ibuprofen" not in assistant_content
+    assert "Dr. Prescription" in assistant_content
+
+    sessions_resp = await async_client.get(
+        "/api/v1/chat/prescriptions/sessions",
+        headers=headers,
+    )
+    assert sessions_resp.status_code == 200
+    sessions = sessions_resp.json()
+    assert any(
+        s["session_id"] == session_id and s["assistant_type"] == "prescription"
+        for s in sessions
+    )
+
+    history_resp = await async_client.get(
+        f"/api/v1/chat/prescriptions/sessions/{session_id}",
+        headers=headers,
+    )
+    assert history_resp.status_code == 200
+    assert len(history_resp.json()) == 2
+
+
+@pytest.mark.asyncio
+async def test_patient_tool_call_own_appointments_succeeds(setup_db):
+    """A patient requesting their own appointments via get_patient_appointments or get_appointments succeeds."""
+    engine = setup_db
+
+    hospital_id = str(ObjectId())
+    patient_id = str(ObjectId())
+    doctor_id = str(ObjectId())
+
+    # Create appointment for this patient
+    appt = AppointmentModel(
+        hospital_id=hospital_id,
+        doctor_id=doctor_id,
+        patient_id=patient_id,
+        patient_name="Patient User",
+        date="2026-08-12",
+        slot="10:00 AM",
+        reason="General Checkup",
+        temperature="98.6",
+        symptoms=[],
+    )
+    await engine.save(appt)
+
+    patient_context = {
+        "user_id": patient_id,
+        "email": "patient@clinic.com",
+        "role": "patient",
+        "hospital_id": hospital_id,
+        "name": "Patient User",
+    }
+
+    # Test direct get_patient_appointments tool execution
+    res = await execute_tool_call(
+        engine=engine,
+        current_user=patient_context,
+        tool_name="get_patient_appointments",
+        tool_args={"start_date": "2026-08-12", "end_date": "2026-08-12"},
+    )
+    assert res.get("total_appointments") == 1
+    assert res["appointments"][0]["patient_name"] == "Patient User"
+
+    # Test get_appointments routing for patient role
+    res_alt = await execute_tool_call(
+        engine=engine,
+        current_user=patient_context,
+        tool_name="get_appointments",
+        tool_args={"doctor_id": patient_id, "start_date": "2026-08-12", "end_date": "2026-08-12"},
+    )
+    assert res_alt.get("total_appointments") == 1
+
+
+@pytest.mark.asyncio
+async def test_get_available_slots_tool_succeeds(setup_db):
+    """get_available_slots tool returns available appointment slots for a given date."""
+    engine = setup_db
+
+    hospital_id = str(ObjectId())
+    patient_context = {
+        "user_id": str(ObjectId()),
+        "email": "user@clinic.com",
+        "role": "patient",
+        "hospital_id": hospital_id,
+        "name": "User",
+    }
+
+    res = await execute_tool_call(
+        engine=engine,
+        current_user=patient_context,
+        tool_name="get_available_slots",
+        tool_args={"date": "2026-08-15"},
+    )
+    assert "available_slots" in res
+    assert res.get("date") == "2026-08-15"
+
+
+@pytest.mark.asyncio
+async def test_gemini_model_fallback_on_quota_error(monkeypatch, setup_db):
+    """When the primary Gemini model fails with a 429 quota error, fallback model succeeds."""
+    attempted_models = []
+
+    class MockModels:
+        def generate_content(self, model, contents, config):
+            attempted_models.append(model)
+            if model == "gemini-2.0-flash":
+                raise RuntimeError("429 RESOURCE_EXHAUSTED: Quota exceeded for gemini-2.0-flash")
+            
+            # Fallback model succeeds
+            class Candidate:
+                content = "Fallback success content"
+            class Response:
+                function_calls = None
+                candidates = [Candidate()]
+                text = "Fallback Gemini Answer"
+            return Response()
+
+    class MockGeminiClient:
+        models = MockModels()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-gemini-key")
+    monkeypatch.setattr(
+        "chatbot.gemini_client.get_gemini_client",
+        lambda: MockGeminiClient(),
+    )
+
+    result = await run_chat_completion(
+        engine=setup_db,
+        current_user={
+            "user_id": str(ObjectId()),
+            "email": "doctor@example.com",
+            "role": "doctor",
+            "hospital_id": str(ObjectId()),
+            "name": "Dr. Test",
+        },
+        messages_history=[],
+        user_prompt="Show my schedule today",
+    )
+
+    assert result == "Fallback Gemini Answer"
+    assert "gemini-2.0-flash" in attempted_models
+    assert len(attempted_models) >= 2

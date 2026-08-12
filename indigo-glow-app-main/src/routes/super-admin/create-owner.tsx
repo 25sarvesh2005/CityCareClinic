@@ -58,8 +58,8 @@ function CreateOwnerContent() {
       await api.createHospitalOwner(selectedHospitalId, { name, email, password });
       toast.success("Hospital owner account created successfully!");
       navigate({ to: "/super-admin/hospitals" });
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create hospital owner");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to create hospital owner");
     } finally {
       setBusy(false);
     }

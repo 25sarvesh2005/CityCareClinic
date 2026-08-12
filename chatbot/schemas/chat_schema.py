@@ -25,6 +25,7 @@ class ChatSessionResponse(BaseModel):
     session_id: str
     user_id: str
     hospital_id: str
+    assistant_type: str = "schedule"
     title: str
     created_at: str
 

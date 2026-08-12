@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { Building2, Plus, CheckCircle, AlertTriangle, UserPlus, Search } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -36,20 +36,20 @@ function HospitalsContent() {
     contact_number: "",
   });
 
-  async function loadHospitals() {
+  const loadHospitals = useCallback(async () => {
     try {
       const data = await api.listHospitals();
       setHospitals(data);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to load hospitals");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to load hospitals");
     } finally {
       setLoading(false);
     }
-  }
+  }, [toast]);
 
   useEffect(() => {
     loadHospitals();
-  }, []);
+  }, [loadHospitals]);
 
   async function handleCreateHospital(e: React.FormEvent) {
     e.preventDefault();
@@ -64,8 +64,8 @@ function HospitalsContent() {
       setForm({ name: "", address: "", city: "", contact_number: "" });
       setShowAddForm(false);
       await loadHospitals();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create hospital");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to create hospital");
     } finally {
       setBusy(false);
     }
@@ -83,8 +83,8 @@ function HospitalsContent() {
       await api.setHospitalStatus(hospital_id, payload);
       toast.success("Hospital status updated");
       await loadHospitals();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update hospital status");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update hospital status");
     }
   }
 

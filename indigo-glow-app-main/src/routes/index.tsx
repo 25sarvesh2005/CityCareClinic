@@ -1,21 +1,18 @@
 import { useState, useEffect } from "react";
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   Building2,
   CheckCircle2,
   Clock,
   ShieldCheck,
   Stethoscope,
-  Users,
-  Activity,
   ArrowRight,
   Heart,
-  Sparkles,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, GlassCard } from "@/components/ui-kit";
 import { CascadingAuthCard } from "@/components/CascadingAuthCard";
-import { useSession } from "@/lib/auth";
+import { homeForRole, useSession } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -59,6 +56,21 @@ export function LandingPage({ defaultAuthTab }: { defaultAuthTab?: "login" | "si
     setAuthSheet(null);
   }
 
+  const bookingCtaLabel = !user
+    ? "Sign in to book appointment"
+    : user.role === "patient"
+      ? "Browse hospitals & clinics"
+      : "Go to your dashboard";
+
+  function openBookingAccess() {
+    if (!user) {
+      triggerAuthSheet("login");
+      return;
+    }
+
+    navigate({ to: user.role === "patient" ? "/hospitals" : homeForRole(user.role) });
+  }
+
   return (
     <AppShell onOpenAuth={(mode) => triggerAuthSheet(mode)}>
       <section className="grid items-center gap-10 py-6 lg:grid-cols-[1.1fr_1fr] min-h-[520px]">
@@ -76,13 +88,17 @@ export function LandingPage({ defaultAuthTab }: { defaultAuthTab?: "login" | "si
             consultation slots in advance.
           </p>
 
-          {/* Direct CTA Action Button */}
-          <div className="flex items-center gap-3 pt-2">
-            <Link to="/hospitals">
-              <Button variant="primary" size="md">
-                Browse Hospitals & Clinics <ArrowRight className="size-4 ml-1" />
-              </Button>
-            </Link>
+          {/* Auth-aware CTA Action */}
+          <div className="space-y-2 pt-2">
+            <Button type="button" variant="primary" size="md" onClick={openBookingAccess}>
+              {bookingCtaLabel} <ArrowRight className="ml-1 size-4" />
+            </Button>
+            {!user && (
+              <p className="max-w-md text-xs text-muted-foreground">
+                Patients must sign in before viewing doctors, selecting slots, or confirming a
+                booking.
+              </p>
+            )}
           </div>
 
           <dl className="grid max-w-md grid-cols-3 gap-4 pt-2">
@@ -148,7 +164,7 @@ export function LandingPage({ defaultAuthTab }: { defaultAuthTab?: "login" | "si
                     className="w-full gap-2 text-xs font-semibold"
                     variant="primary"
                   >
-                    Sign In to Access Platform
+                    Patient sign in to book
                     <ArrowRight className="size-4" />
                   </Button>
                 </div>
@@ -158,7 +174,7 @@ export function LandingPage({ defaultAuthTab }: { defaultAuthTab?: "login" | "si
         </div>
       </section>
 
-      <Sections triggerAuthSheet={triggerAuthSheet} user={user} />
+      <Sections bookingCtaLabel={bookingCtaLabel} onBookingCta={openBookingAccess} />
     </AppShell>
   );
 }
@@ -227,11 +243,11 @@ const FAQS = [
 ];
 
 function Sections({
-  triggerAuthSheet,
-  user,
+  bookingCtaLabel,
+  onBookingCta,
 }: {
-  triggerAuthSheet: (mode: "login" | "signup") => void;
-  user: any;
+  bookingCtaLabel: string;
+  onBookingCta: () => void;
 }) {
   return (
     <>
@@ -269,11 +285,9 @@ function Sections({
               Consult with board-certified specialists across various medical disciplines.
             </p>
           </div>
-          <Link to="/hospitals">
-            <Button variant="primary" size="sm">
-              Browse Hospitals & Clinics <ArrowRight className="size-4 ml-1" />
-            </Button>
-          </Link>
+          <Button type="button" variant="primary" size="sm" onClick={onBookingCta}>
+            {bookingCtaLabel} <ArrowRight className="ml-1 size-4" />
+          </Button>
         </div>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

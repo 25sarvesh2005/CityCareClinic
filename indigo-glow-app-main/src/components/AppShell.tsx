@@ -17,6 +17,7 @@ import {
   X,
   LogIn,
   UserCheck,
+  Sparkles,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { clearSession, homeForRole, useSession } from "@/lib/auth";
@@ -57,10 +58,7 @@ export function AppShell({
 
   const navItems = () => {
     if (!user) {
-      return [
-        { label: "Home Overview", to: "/", icon: Home },
-        { label: "Browse Hospitals", to: "/hospitals", icon: Building2 },
-      ];
+      return [{ label: "Home Overview", to: "/", icon: Home }];
     }
 
     switch (user.role) {
@@ -74,15 +72,20 @@ export function AppShell({
         return [
           { label: "Hospital Dashboard", to: "/hospital-owner/dashboard", icon: LayoutDashboard },
           { label: "Doctors Staff", to: "/hospital-owner/doctors", icon: Users },
+          { label: "Schedule AI Workspace", to: "/schedule-ai", icon: Sparkles },
         ];
       case "doctor":
-        return [{ label: "Consultation Timeline", to: "/doctor", icon: Activity }];
+        return [
+          { label: "Consultation Timeline", to: "/doctor", icon: Activity },
+          { label: "Schedule AI Workspace", to: "/schedule-ai", icon: Sparkles },
+        ];
       case "patient":
       default:
         return [
           { label: "Home Overview", to: "/", icon: Home },
           { label: "Browse Hospitals", to: "/hospitals", icon: Building2 },
           { label: "My Appointments", to: "/dashboard", icon: Calendar },
+          { label: "Prescription AI Workspace", to: "/prescription-ai", icon: Sparkles },
         ];
     }
   };
@@ -90,11 +93,11 @@ export function AppShell({
   const activeNavs = navItems();
 
   return (
-    <div className="mesh min-h-screen bg-background text-foreground flex flex-col md:flex-row p-0 sm:p-4 gap-4">
+    <div className="mesh flex min-h-screen flex-col gap-3 bg-background p-0 text-foreground sm:p-3 md:flex-row">
       {/* Mobile Top Bar */}
       <div className="md:hidden sticky top-0 z-50 flex items-center justify-between border-b border-glass-border bg-card/90 px-4 py-3 backdrop-blur-xl">
         <Link to={logoDestination} className="flex items-center gap-2.5">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo to-cyan text-cyan-foreground">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-indigo text-primary-foreground shadow-sm">
             <Stethoscope className="size-4" />
           </span>
           <span className="font-bold text-sm text-foreground">CityCare</span>
@@ -110,29 +113,29 @@ export function AppShell({
 
       {/* Role-Based Interactive Left Sidebar */}
       <aside
-        className={`glass rounded-2xl md:rounded-[2rem] flex flex-col justify-between transition-all duration-300 z-40 bg-card/90 backdrop-blur-xl border border-glass-border shadow-2xl md:sticky md:top-4 md:h-[calc(100vh-2rem)] md:self-start ${
-          mobileOpen ? "fixed inset-x-2 top-14 bottom-2 z-50 flex" : "hidden md:flex"
-        } ${collapsed ? "md:w-20" : "md:w-64"}`}
+        className={`glass z-40 flex flex-col justify-between rounded-none border border-glass-border bg-sidebar/95 shadow-sm transition-all duration-300 md:sticky md:top-3 md:h-[calc(100vh-1.5rem)] md:self-start md:rounded-2xl ${
+          mobileOpen ? "fixed inset-x-3 top-16 bottom-3 z-50 flex" : "hidden md:flex"
+        } ${collapsed ? "md:w-20" : "md:w-60"}`}
       >
         {/* Top Branding & Collapse Toggle */}
         <div
-          className={`p-4 space-y-5 overflow-y-auto max-h-full ${collapsed ? "flex flex-col items-center px-2 py-4" : ""}`}
+          className={`max-h-full space-y-5 overflow-y-auto p-4 ${collapsed ? "flex flex-col items-center px-2 py-4" : ""}`}
         >
           <div
             className={`flex items-center w-full ${collapsed ? "flex-col gap-3 justify-center" : "justify-between"}`}
           >
             <Link to={logoDestination} className="flex items-center gap-3 shrink-0">
-              <span className="glow-cyan flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo to-cyan shadow-lg shadow-indigo/20 transition-transform hover:scale-105">
-                <Stethoscope className="size-5 text-cyan-foreground" />
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-indigo/15 bg-indigo/10 text-indigo transition-colors hover:bg-indigo/15">
+                <Stethoscope className="size-5" />
               </span>
               {!collapsed && (
                 <div className="flex flex-col min-w-0">
                   <span className="text-sm font-bold tracking-tight text-foreground truncate flex items-center gap-1.5">
                     CityCare
-                    <span className="size-1.5 rounded-full bg-cyan animate-pulse shrink-0" />
+                    <span className="size-1.5 rounded-full bg-success shrink-0" />
                   </span>
                   <span className="text-[10px] font-medium tracking-wider text-muted-foreground uppercase truncate">
-                    Multi-Tenant
+                    Care Operations
                   </span>
                 </div>
               )}
@@ -150,9 +153,9 @@ export function AppShell({
 
           {/* Role Context Chip */}
           {!collapsed && (
-            <div className="rounded-xl border border-glass-border/60 bg-secondary/30 px-3 py-2 text-xs flex items-center justify-between">
+            <div className="flex items-center justify-between rounded-xl border border-glass-border/70 bg-accent/45 px-3 py-2 text-xs">
               <span className="text-muted-foreground">Context:</span>
-              <span className="font-semibold text-cyan flex items-center gap-1">
+              <span className="font-semibold text-indigo flex items-center gap-1">
                 <ShieldCheck className="size-3.5" />
                 {roleLabel(user?.role || "guest")}
               </span>
@@ -179,17 +182,17 @@ export function AppShell({
                   to={item.to}
                   onClick={() => setMobileOpen(false)}
                   title={collapsed ? item.label : undefined}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all group ${
+                  className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-medium transition-all ${
                     collapsed ? "justify-center px-0 py-2.5" : ""
                   } ${
                     isActive
-                      ? "bg-gradient-to-r from-indigo/20 to-cyan/20 text-cyan border border-cyan/40 shadow-sm shadow-cyan/10 font-semibold"
+                      ? "border border-indigo/20 bg-indigo/10 text-indigo font-semibold"
                       : "text-muted-foreground hover:text-foreground hover:bg-secondary/40 border border-transparent"
                   }`}
                 >
                   <Icon
                     className={`size-4 shrink-0 transition-transform group-hover:scale-110 ${
-                      isActive ? "text-cyan" : "text-muted-foreground"
+                      isActive ? "text-indigo" : "text-muted-foreground"
                     }`}
                   />
                   {!collapsed && <span className="truncate">{item.label}</span>}
@@ -207,7 +210,7 @@ export function AppShell({
             <div className="w-full space-y-3">
               {!collapsed && (
                 <div className="flex items-center gap-2.5 px-1">
-                  <div className="size-8 rounded-full bg-gradient-to-br from-indigo to-cyan flex items-center justify-center text-cyan-foreground font-bold text-xs shrink-0">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-indigo text-xs font-bold text-primary-foreground">
                     {user.name ? user.name.charAt(0).toUpperCase() : "U"}
                   </div>
                   <div className="flex flex-col min-w-0">
@@ -240,7 +243,7 @@ export function AppShell({
               {!collapsed ? (
                 <p className="px-1">Welcome to CityCare Platform</p>
               ) : (
-                <span className="size-2 rounded-full bg-cyan inline-block animate-pulse" />
+                <span className="inline-block size-2 rounded-full bg-success" />
               )}
             </div>
           )}
@@ -248,9 +251,9 @@ export function AppShell({
       </aside>
 
       {/* Main Content Area */}
-      <div className="glass flex-1 min-w-0 rounded-2xl md:rounded-[2rem] bg-card overflow-hidden border border-glass-border flex flex-col justify-between">
+      <div className="glass flex min-w-0 flex-1 flex-col justify-between overflow-hidden rounded-none border border-glass-border bg-card/95 shadow-sm md:rounded-2xl">
         {/* Top Header Bar for Quick Auth / Session Status */}
-        <header className="border-b border-glass-border bg-card/60 px-6 py-3.5 backdrop-blur-md flex items-center justify-between">
+        <header className="flex items-center justify-between border-b border-glass-border bg-card/85 px-6 py-3.5 backdrop-blur-md">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Link
               to={logoDestination}
@@ -280,7 +283,7 @@ export function AppShell({
           )}
         </header>
 
-        <main className="px-4 py-6 md:px-8 md:py-8 max-w-6xl w-full mx-auto">{children}</main>
+        <main className="mx-auto w-full max-w-7xl px-4 py-6 md:px-8 md:py-8">{children}</main>
 
         <footer className="border-t border-glass-border py-4 px-6 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
           <p>© {new Date().getFullYear()} CityCare Multi-Tenant Healthcare Platform</p>

@@ -7,7 +7,7 @@ export function GlassCard({
   ...props
 }: { className?: string; children: ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("glass rounded-3xl p-6", className)} {...props}>
+    <div className={cn("glass rounded-2xl p-5", className)} {...props}>
       {children}
     </div>
   );
@@ -22,21 +22,23 @@ export function Button({ variant = "primary", size = "md", className, ...props }
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all duration-200",
+        "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
         "disabled:cursor-not-allowed disabled:opacity-50",
         "active:scale-[0.97]",
-        size === "xs" ? "px-2.5 py-1 text-[11px]" : size === "sm" ? "px-3.5 py-2 text-xs" : "px-5 py-2.5 text-sm",
-        variant === "primary" &&
-          "bg-gradient-to-r from-indigo to-cyan text-cyan-foreground hover:glow-indigo hover:-translate-y-0.5",
+        size === "xs"
+          ? "px-2.5 py-1 text-[11px]"
+          : size === "sm"
+            ? "px-3.5 py-2 text-xs"
+            : "px-5 py-2.5 text-sm",
+        variant === "primary" && "bg-indigo text-primary-foreground shadow-sm hover:bg-indigo/90",
         variant === "secondary" && "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         variant === "outline" &&
-          "border border-glass-border bg-glass text-foreground hover:border-cyan/50 hover:-translate-y-0.5",
+          "border border-glass-border bg-card/80 text-foreground hover:border-cyan/55 hover:bg-secondary/60",
         variant === "ghost" && "text-muted-foreground hover:bg-secondary hover:text-foreground",
         variant === "danger" &&
           "bg-destructive/15 text-destructive hover:bg-destructive/25 border border-destructive/30",
-        variant === "cyan" &&
-          "bg-cyan/15 text-cyan hover:bg-cyan/25 border border-cyan/30",
+        variant === "cyan" && "bg-cyan/15 text-cyan hover:bg-cyan/25 border border-cyan/30",
         variant === "indigo" &&
           "bg-indigo/15 text-indigo hover:bg-indigo/25 border border-indigo/30",
         className,
@@ -91,12 +93,12 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
-        tone === "indigo" && "bg-indigo/15 text-indigo",
-        tone === "cyan" && "bg-cyan/15 text-cyan",
-        tone === "success" && "bg-success/15 text-success",
-        tone === "danger" && "bg-destructive/15 text-destructive",
-        tone === "warning" && "bg-warning/15 text-warning",
+        "inline-flex items-center rounded-lg border px-2.5 py-1 text-[11px] font-medium",
+        tone === "indigo" && "border-indigo/15 bg-indigo/10 text-indigo",
+        tone === "cyan" && "border-cyan/15 bg-cyan/10 text-cyan",
+        tone === "success" && "border-success/15 bg-success/10 text-success",
+        tone === "danger" && "border-destructive/15 bg-destructive/10 text-destructive",
+        tone === "warning" && "border-warning/20 bg-warning/10 text-warning",
         tone === "muted" && "bg-secondary text-muted-foreground",
       )}
     >
@@ -130,7 +132,7 @@ export function ConfirmDialog({
         onClick={onCancel}
         aria-hidden
       />
-      <GlassCard className="animate-rise glow-indigo relative w-full max-w-sm">
+      <GlassCard className="animate-rise relative w-full max-w-sm border-border/70 shadow-xl">
         <h3 className="text-base font-semibold text-foreground">{title}</h3>
         <p className="mt-2 text-sm text-muted-foreground">{description}</p>
         <div className="mt-6 flex justify-end gap-2">

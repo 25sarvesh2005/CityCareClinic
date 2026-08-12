@@ -8,6 +8,7 @@ requested doctor_id is inside the authenticated user's authorized set:
 NEVER trust a doctor_id Gemini returns as pre-authorized.
 """
 
+from datetime import date
 from typing import Any, Dict, Set
 from odmantic import AIOEngine
 
@@ -79,15 +80,57 @@ async def execute_tool_call(
     logger.info("Intercepted tool call '%s' with args %s for user role '%s'", tool_name, tool_args, user_role)
 
     if tool_name == "get_appointments":
+        start_date = tool_args.get("start_date") or date.today().isoformat()
+        end_date = tool_args.get("end_date") or start_date
         requested_doctor_id = tool_args.get("doctor_id")
-        start_date = tool_args.get("start_date")
-        end_date = tool_args.get("end_date")
+
+        # If user is a patient and Gemini calls get_appointments, safely route to patient appointments lookup
+        if user_role == UserRole.PATIENT.value:
+            return await execute_tool_call(
+                engine=engine,
+                current_user=current_user,
+                tool_name="get_patient_appointments",
+                tool_args={"start_date": start_date, "end_date": end_date},
+            )
+
+        # For doctor role, default to doctor's own user ID if missing
+        if user_role == UserRole.DOCTOR.value and not requested_doctor_id:
+            requested_doctor_id = current_user.get("user_id")
+
+        # For hospital owner, if doctor_id is missing or 'all', fetch appointments for all clinic doctors
+        if user_role == UserRole.HOSPITAL_OWNER.value and (not requested_doctor_id or requested_doctor_id == "all"):
+            appointments = await engine.find(
+                AppointmentModel,
+                (AppointmentModel.hospital_id == hospital_id)
+                & (AppointmentModel.date >= start_date)
+                & (AppointmentModel.date <= end_date),
+                sort=AppointmentModel.date,
+            )
+            return {
+                "hospital_id": hospital_id,
+                "doctor_id": "all",
+                "start_date": start_date,
+                "end_date": end_date,
+                "total_appointments": len(appointments),
+                "appointments": [
+                    {
+                        "appointment_id": str(a.id),
+                        "doctor_id": a.doctor_id,
+                        "patient_name": a.patient_name,
+                        "date": a.date,
+                        "slot": a.slot,
+                        "reason": a.reason,
+                        "temperature": a.temperature,
+                        "symptoms": [s.value for s in a.symptoms],
+                        "is_cancelled": a.is_cancelled,
+                        "cancellation_reason": a.cancellation_reason,
+                    }
+                    for a in appointments
+                ],
+            }
 
         if not requested_doctor_id:
             return {"error": "Missing required argument 'doctor_id'."}
-
-        if not start_date or not end_date:
-            return {"error": "Missing required date arguments ('start_date', 'end_date')."}
 
         # ── CRITICAL SECURITY CHECK ──
         if requested_doctor_id not in authorized_doctor_ids:
@@ -107,7 +150,6 @@ async def execute_tool_call(
             }
 
         # Authorized! Query appointments matching hospital_id, doctor_id (or matched IDs), and date range
-        # Note: appointments in DB may match requested_doctor_id, or mapped profile/user_id
         matched_ids = [requested_doctor_id]
         for aid in authorized_doctor_ids:
             if aid not in matched_ids:
@@ -142,6 +184,64 @@ async def execute_tool_call(
                 for a in appointments
             ],
         }
+
+    elif tool_name == "get_patient_appointments":
+        patient_id = current_user.get("user_id") or ""
+        if not patient_id:
+            return {"error": "Unauthorized: Patient identity missing."}
+
+        start_date = tool_args.get("start_date") or date.today().isoformat()
+        end_date = tool_args.get("end_date") or start_date
+
+        appointments = await engine.find(
+            AppointmentModel,
+            (AppointmentModel.patient_id == patient_id)
+            & (AppointmentModel.date >= start_date)
+            & (AppointmentModel.date <= end_date),
+            sort=AppointmentModel.date,
+        )
+
+        return {
+            "patient_id": patient_id,
+            "start_date": start_date,
+            "end_date": end_date,
+            "total_appointments": len(appointments),
+            "appointments": [
+                {
+                    "appointment_id": str(a.id),
+                    "doctor_id": a.doctor_id,
+                    "patient_name": a.patient_name,
+                    "date": a.date,
+                    "slot": a.slot,
+                    "reason": a.reason,
+                    "temperature": a.temperature,
+                    "symptoms": [s.value for s in a.symptoms],
+                    "is_cancelled": a.is_cancelled,
+                    "cancellation_reason": a.cancellation_reason,
+                }
+                for a in appointments
+            ],
+        }
+
+    elif tool_name == "get_available_slots":
+        req_date = tool_args.get("date") or date.today().isoformat()
+        req_doctor_id = tool_args.get("doctor_id") or ""
+
+        from core.controllers.doctor_controller import DoctorController
+        try:
+            slots_resp = await DoctorController().get_free_slots(
+                requested_date=req_date,
+                hospital_id=hospital_id or "",
+                doctor_id=req_doctor_id,
+            )
+            return {
+                "date": slots_resp.date,
+                "total_available": slots_resp.total_available,
+                "available_slots": slots_resp.available_slots,
+            }
+        except Exception as err:
+            logger.warning("Failed to query free slots: %s", str(err))
+            return {"date": req_date, "available_slots": [], "total_available": 0, "note": str(err)}
 
     elif tool_name == "get_doctor_list":
         req_hospital_id = tool_args.get("hospital_id") or hospital_id

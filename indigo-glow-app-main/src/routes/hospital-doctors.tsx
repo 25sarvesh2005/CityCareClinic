@@ -12,6 +12,7 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { useToast } from "@/components/Toaster";
 import { AestheticDatePicker } from "@/components/AestheticDatePicker";
+import { RoleGuard } from "@/components/RoleGuard";
 import { Badge, Button, Field, GlassCard, Skeleton } from "@/components/ui-kit";
 import { api, SYMPTOMS, SYMPTOM_LABELS, type DoctorProfile, type Symptom } from "@/lib/api";
 import { useSession } from "@/lib/auth";
@@ -21,8 +22,18 @@ export const Route = createFileRoute("/hospital-doctors")({
     hospital_id: (search["hospital_id"] as string) || "",
     hospital_name: (search["hospital_name"] as string) || "Hospital",
   }),
-  component: HospitalDoctorsPage,
+  component: () => (
+    <RoleGuard role="patient">
+      <HospitalDoctorsPage />
+    </RoleGuard>
+  ),
 });
+
+function getLocalTodayIso(): string {
+  const now = new Date();
+  const localTime = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return localTime.toISOString().slice(0, 10);
+}
 
 function HospitalDoctorsPage() {
   const { hospital_id, hospital_name } = useSearch({ from: "/hospital-doctors" });
@@ -38,9 +49,7 @@ function HospitalDoctorsPage() {
   const [selectedDoctor, setSelectedDoctor] = useState<DoctorProfile | null>(null);
 
   // Booking Form State — default to today's ISO date string (YYYY-MM-DD)
-  const [selectedDate, setSelectedDate] = useState<string>(() =>
-    new Date().toISOString().slice(0, 10),
-  );
+  const [selectedDate, setSelectedDate] = useState<string>(getLocalTodayIso);
   const [freeSlots, setFreeSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<string>("");
@@ -79,14 +88,14 @@ function HospitalDoctorsPage() {
           setDoctors([]);
           setSelectedDoctor(null);
         }
-      } catch (err: any) {
-        toast.error(err.message || "Failed to load doctor profiles");
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Failed to load doctor profiles");
       } finally {
         setLoadingDoctors(false);
       }
     }
     loadDoctors();
-  }, [hospital_id, hospital_name]);
+  }, [hospital_id, hospital_name, toast]);
 
   useEffect(() => {
     async function fetchSlots() {
@@ -108,15 +117,15 @@ function HospitalDoctorsPage() {
         } else {
           setSelectedSlot("");
         }
-      } catch (err: any) {
-        toast.error(err.message || "Failed to fetch free slots");
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Failed to fetch free slots");
         setFreeSlots([]);
       } finally {
         setLoadingSlots(false);
       }
     }
     fetchSlots();
-  }, [activeHospitalId, selectedDoctor, selectedDate]);
+  }, [activeHospitalId, selectedDoctor, selectedDate, toast]);
 
   function toggleSymptom(s: Symptom) {
     if (selectedSymptoms.includes(s)) {
@@ -166,8 +175,8 @@ function HospitalDoctorsPage() {
       });
       toast.success("Appointment booked successfully!");
       navigate({ to: "/dashboard" });
-    } catch (err: any) {
-      toast.error(err.message || "Failed to book appointment");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to book appointment");
     } finally {
       setBookingBusy(false);
     }
@@ -293,14 +302,27 @@ function HospitalDoctorsPage() {
                         </span>
                         {loadingSlots ? (
                           <Skeleton className="h-14" />
-                        ) : selectedDoctor?.unavailable_dates?.includes(selectedDate) || freeSlots.length === 0 ? (
+                        ) : selectedDoctor?.unavailable_dates?.includes(selectedDate) ? (
                           <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3.5 text-xs text-destructive space-y-1.5 animate-rise">
                             <p className="font-bold flex items-center gap-1.5 text-sm">
                               <AlertTriangle className="size-4 shrink-0 text-destructive" />
                               Physician Marked Unavailable (Off-Day)
                             </p>
                             <p className="text-muted-foreground">
-                              {selectedDoctor?.name || "The doctor"} is marked as unavailable (off-day) on {selectedDate}. All consultation slots for this date are disabled. Please select another date above.
+                              {selectedDoctor?.name || "The doctor"} is marked as unavailable
+                              (off-day) on {selectedDate}. All consultation slots for this date are
+                              disabled. Please select another date above.
+                            </p>
+                          </div>
+                        ) : freeSlots.length === 0 ? (
+                          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-xs text-amber-700 dark:text-amber-300 space-y-1.5 animate-rise">
+                            <p className="font-bold flex items-center gap-1.5 text-sm">
+                              <AlertTriangle className="size-4 shrink-0" />
+                              No Slots Available
+                            </p>
+                            <p className="text-muted-foreground">
+                              There are no remaining consultation slots for {selectedDate}. Please
+                              select another date or specialist.
                             </p>
                           </div>
                         ) : (

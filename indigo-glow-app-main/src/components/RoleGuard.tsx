@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useCallback, useEffect, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import type { Role } from "@/lib/api";
 import { homeForRole, useSession } from "@/lib/auth";
@@ -9,9 +9,12 @@ export function RoleGuard({ role, children }: { role: Role | Role[]; children: R
   const { user, ready } = useSession();
   const navigate = useNavigate();
 
-  const isAllowed = (userRole: Role) => {
-    return Array.isArray(role) ? role.includes(userRole) : userRole === role;
-  };
+  const isAllowed = useCallback(
+    (userRole: Role) => {
+      return Array.isArray(role) ? role.includes(userRole) : userRole === role;
+    },
+    [role],
+  );
 
   useEffect(() => {
     if (!ready) return;
@@ -20,7 +23,7 @@ export function RoleGuard({ role, children }: { role: Role | Role[]; children: R
     } else if (!isAllowed(user.role)) {
       navigate({ to: homeForRole(user.role), replace: true });
     }
-  }, [ready, user, role, navigate]);
+  }, [ready, user, isAllowed, navigate]);
 
   if (!ready || !user || !isAllowed(user.role)) {
     return (

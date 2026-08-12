@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Clock,
   Filter,
+  Sparkles,
   Stethoscope,
   Thermometer,
   UserCheck,
@@ -17,7 +18,6 @@ import {
 import { AppShell } from "@/components/AppShell";
 import { RoleGuard } from "@/components/RoleGuard";
 import { AestheticDatePicker } from "@/components/AestheticDatePicker";
-import { ScheduleChatBot } from "@/components/chatbot/ScheduleChatBot";
 import { useToast } from "@/components/Toaster";
 import { Badge, Button, GlassCard, Skeleton } from "@/components/ui-kit";
 import { api, ApiError, SYMPTOM_LABELS, type DoctorScheduleEntry } from "@/lib/api";
@@ -103,14 +103,27 @@ function DoctorDashboard() {
     retry: false,
   });
 
-  const [selectedApptForPrescription, setSelectedApptForPrescription] = useState<DoctorScheduleEntry | null>(null);
+  const [selectedApptForPrescription, setSelectedApptForPrescription] =
+    useState<DoctorScheduleEntry | null>(null);
   const [rxDiagnosis, setRxDiagnosis] = useState("");
   const [rxNotes, setRxNotes] = useState("");
   const [rxFollowUp, setRxFollowUp] = useState("");
   const [rxMedications, setRxMedications] = useState<
-    { medicine_name: string; dosage: string; frequency: string; duration: string; instructions?: string }[]
+    {
+      medicine_name: string;
+      dosage: string;
+      frequency: string;
+      duration: string;
+      instructions?: string;
+    }[]
   >([
-    { medicine_name: "", dosage: "", frequency: "1-0-1 after meals", duration: "5 days", instructions: "" },
+    {
+      medicine_name: "",
+      dosage: "",
+      frequency: "1-0-1 after meals",
+      duration: "5 days",
+      instructions: "",
+    },
   ]);
 
   const acceptMutation = useMutation({
@@ -140,7 +153,13 @@ function DoctorDashboard() {
       setRxNotes("");
       setRxFollowUp("");
       setRxMedications([
-        { medicine_name: "", dosage: "", frequency: "1-0-1 after meals", duration: "5 days", instructions: "" },
+        {
+          medicine_name: "",
+          dosage: "",
+          frequency: "1-0-1 after meals",
+          duration: "5 days",
+          instructions: "",
+        },
       ]);
       queryClient.invalidateQueries({ queryKey: ["doctor-schedule"] });
     },
@@ -160,8 +179,8 @@ function DoctorDashboard() {
       queryClient.invalidateQueries({ queryKey: ["doctor-schedule", date] });
       queryClient.invalidateQueries({ queryKey: ["doctor-unavailability"] });
     },
-    onError: (err: any) => {
-      toast.error(err?.message || "Failed to update availability status");
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "Failed to update availability status");
     },
   });
 
@@ -220,6 +239,12 @@ function DoctorDashboard() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <Link to="/schedule-ai">
+              <Button variant="primary" size="sm" className="text-xs gap-1.5 h-9 bg-gradient-to-r from-indigo to-cyan border-none text-white shadow-sm">
+                <Sparkles className="size-4 text-cyan-200" />
+                <span>Schedule AI Workspace</span>
+              </Button>
+            </Link>
             <Button
               variant={isDayUnavailable ? "outline" : "secondary"}
               size="sm"
@@ -508,7 +533,9 @@ function DoctorDashboard() {
                               {!appointment.is_cancelled && (
                                 <div className="mt-3 pt-3 border-t border-glass-border/40 flex flex-wrap items-center justify-between gap-2">
                                   <div className="flex items-center gap-2">
-                                    <span className="text-[11px] text-muted-foreground font-medium">Status:</span>
+                                    <span className="text-[11px] text-muted-foreground font-medium">
+                                      Status:
+                                    </span>
                                     {appointment.status === "pending" && (
                                       <Badge tone="warning">Pending Approval</Badge>
                                     )}
@@ -530,7 +557,9 @@ function DoctorDashboard() {
                                           size="xs"
                                           variant="secondary"
                                           className="text-destructive hover:bg-destructive/10"
-                                          onClick={() => rejectMutation.mutate(appointment.appointment_id)}
+                                          onClick={() =>
+                                            rejectMutation.mutate(appointment.appointment_id)
+                                          }
                                           disabled={rejectMutation.isPending}
                                         >
                                           Decline
@@ -538,7 +567,9 @@ function DoctorDashboard() {
                                         <Button
                                           size="xs"
                                           variant="cyan"
-                                          onClick={() => acceptMutation.mutate(appointment.appointment_id)}
+                                          onClick={() =>
+                                            acceptMutation.mutate(appointment.appointment_id)
+                                          }
                                           disabled={acceptMutation.isPending}
                                         >
                                           Accept Request
@@ -546,7 +577,8 @@ function DoctorDashboard() {
                                       </>
                                     )}
 
-                                    {(appointment.status === "accepted" || appointment.status === "pending") && (
+                                    {(appointment.status === "accepted" ||
+                                      appointment.status === "pending") && (
                                       <Button
                                         size="xs"
                                         variant="indigo"
@@ -556,11 +588,20 @@ function DoctorDashboard() {
                                       </Button>
                                     )}
 
-                                    {(appointment.status === "completed" || appointment.pdf_url) && (
+                                    {(appointment.status === "completed" ||
+                                      appointment.pdf_url) && (
                                       <Button
                                         size="xs"
                                         variant="secondary"
-                                        onClick={() => window.open(api.getPdfUrl(appointment.pdf_url, appointment.prescription_id), "_blank")}
+                                        onClick={() =>
+                                          window.open(
+                                            api.getPdfUrl(
+                                              appointment.pdf_url,
+                                              appointment.prescription_id,
+                                            ),
+                                            "_blank",
+                                          )
+                                        }
                                       >
                                         <CheckCircle2 className="size-3 text-cyan mr-1" /> View PDF
                                       </Button>
@@ -602,11 +643,13 @@ function DoctorDashboard() {
                 <span className="text-xs font-bold uppercase tracking-wider text-cyan">
                   Doctor Consultation
                 </span>
-                <h3 className="text-xl font-bold text-foreground">
-                  Create Medical Prescription
-                </h3>
+                <h3 className="text-xl font-bold text-foreground">Create Medical Prescription</h3>
                 <p className="text-xs text-muted-foreground">
-                  Patient: <span className="font-semibold text-foreground">{selectedApptForPrescription.patient_name}</span> | Slot: {formatSlotDisplay(selectedApptForPrescription.slot)}
+                  Patient:{" "}
+                  <span className="font-semibold text-foreground">
+                    {selectedApptForPrescription.patient_name}
+                  </span>{" "}
+                  | Slot: {formatSlotDisplay(selectedApptForPrescription.slot)}
                 </p>
               </div>
               <Button
@@ -659,7 +702,13 @@ function DoctorDashboard() {
                     onClick={() =>
                       setRxMedications((prev) => [
                         ...prev,
-                        { medicine_name: "", dosage: "", frequency: "1-0-1 after meals", duration: "5 days", instructions: "" },
+                        {
+                          medicine_name: "",
+                          dosage: "",
+                          frequency: "1-0-1 after meals",
+                          duration: "5 days",
+                          instructions: "",
+                        },
                       ])
                     }
                   >
@@ -668,13 +717,18 @@ function DoctorDashboard() {
                 </div>
 
                 {rxMedications.map((med, idx) => (
-                  <div key={idx} className="rounded-xl border border-glass-border/60 bg-secondary/30 p-3 space-y-2">
+                  <div
+                    key={idx}
+                    className="rounded-xl border border-glass-border/60 bg-secondary/30 p-3 space-y-2"
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-bold text-cyan text-[11px]">Medicine #{idx + 1}</span>
                       {rxMedications.length > 1 && (
                         <button
                           type="button"
-                          onClick={() => setRxMedications((prev) => prev.filter((_, i) => i !== idx))}
+                          onClick={() =>
+                            setRxMedications((prev) => prev.filter((_, i) => i !== idx))
+                          }
                           className="text-destructive hover:underline text-[11px]"
                         >
                           Remove
@@ -689,7 +743,9 @@ function DoctorDashboard() {
                         value={med.medicine_name}
                         onChange={(e) => {
                           const val = e.target.value;
-                          setRxMedications((prev) => prev.map((m, i) => (i === idx ? { ...m, medicine_name: val } : m)));
+                          setRxMedications((prev) =>
+                            prev.map((m, i) => (i === idx ? { ...m, medicine_name: val } : m)),
+                          );
                         }}
                         className="rounded-lg border border-glass-border bg-background px-2 py-1.5 text-xs text-foreground"
                       />
@@ -700,7 +756,9 @@ function DoctorDashboard() {
                         value={med.dosage}
                         onChange={(e) => {
                           const val = e.target.value;
-                          setRxMedications((prev) => prev.map((m, i) => (i === idx ? { ...m, dosage: val } : m)));
+                          setRxMedications((prev) =>
+                            prev.map((m, i) => (i === idx ? { ...m, dosage: val } : m)),
+                          );
                         }}
                         className="rounded-lg border border-glass-border bg-background px-2 py-1.5 text-xs text-foreground"
                       />
@@ -711,7 +769,9 @@ function DoctorDashboard() {
                         value={med.frequency}
                         onChange={(e) => {
                           const val = e.target.value;
-                          setRxMedications((prev) => prev.map((m, i) => (i === idx ? { ...m, frequency: val } : m)));
+                          setRxMedications((prev) =>
+                            prev.map((m, i) => (i === idx ? { ...m, frequency: val } : m)),
+                          );
                         }}
                         className="rounded-lg border border-glass-border bg-background px-2 py-1.5 text-xs text-foreground"
                       />
@@ -722,7 +782,9 @@ function DoctorDashboard() {
                         value={med.duration}
                         onChange={(e) => {
                           const val = e.target.value;
-                          setRxMedications((prev) => prev.map((m, i) => (i === idx ? { ...m, duration: val } : m)));
+                          setRxMedications((prev) =>
+                            prev.map((m, i) => (i === idx ? { ...m, duration: val } : m)),
+                          );
                         }}
                         className="rounded-lg border border-glass-border bg-background px-2 py-1.5 text-xs text-foreground"
                       />
@@ -733,7 +795,9 @@ function DoctorDashboard() {
                       value={med.instructions || ""}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setRxMedications((prev) => prev.map((m, i) => (i === idx ? { ...m, instructions: val } : m)));
+                        setRxMedications((prev) =>
+                          prev.map((m, i) => (i === idx ? { ...m, instructions: val } : m)),
+                        );
                       }}
                       className="w-full rounded-lg border border-glass-border bg-background px-2 py-1.5 text-xs text-foreground"
                     />
@@ -782,15 +846,15 @@ function DoctorDashboard() {
                   variant="cyan"
                   disabled={createPrescriptionMutation.isPending}
                 >
-                  {createPrescriptionMutation.isPending ? "Generating PDF & Uploading..." : "Issue & Store PDF Prescription"}
+                  {createPrescriptionMutation.isPending
+                    ? "Generating PDF & Uploading..."
+                    : "Issue & Store PDF Prescription"}
                 </Button>
               </div>
             </form>
           </div>
         </div>
       )}
-
-      <ScheduleChatBot />
     </AppShell>
   );
 }

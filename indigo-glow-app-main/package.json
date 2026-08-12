@@ -7,7 +7,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "preview": "vite preview",
+    "preview": "npx wrangler --cwd .output dev",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

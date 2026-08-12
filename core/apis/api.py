@@ -23,4 +23,3 @@ api_router.include_router(admin_router)
 api_router.include_router(hospital_router)
 api_router.include_router(prescription_router)
 api_router.include_router(chat_router)
-

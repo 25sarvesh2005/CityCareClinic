@@ -7,12 +7,16 @@ import {
   Loader2,
   Send,
   Sparkles,
-  X,
+  RefreshCw,
+  Calendar,
+  Clock,
+  Users,
+  ShieldCheck,
 } from "lucide-react";
 import { ChatMessage, type ChatMessageItem } from "@/components/chatbot/ChatMessage";
 import { useToast } from "@/components/Toaster";
-import { Button, GlassCard } from "@/components/ui-kit";
-import { api, type ApiError } from "@/lib/api";
+import { Button, GlassCard, Badge } from "@/components/ui-kit";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const SUGGESTED_PROMPTS = [
@@ -23,13 +27,14 @@ const SUGGESTED_PROMPTS = [
 ];
 
 export function ScheduleChatBot() {
-  const [isOpen, setIsOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sessions, setSessions] = useState<{ session_id: string; title: string; created_at: string }[]>([]);
-  const [showSessionsDropdown, setShowSessionsDropdown] = useState(false);
+  const [sessions, setSessions] = useState<
+    { session_id: string; title: string; created_at: string }[]
+  >([]);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
@@ -39,10 +44,8 @@ export function ScheduleChatBot() {
   };
 
   useEffect(() => {
-    if (isOpen) {
-      loadSessions();
-    }
-  }, [isOpen]);
+    loadSessions();
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
@@ -59,19 +62,17 @@ export function ScheduleChatBot() {
 
   const handleSelectSession = async (sid: string) => {
     setSessionId(sid);
-    setShowSessionsDropdown(false);
     try {
       const msgs = await api.getChatMessages(sid);
       setMessages(msgs);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to load session history");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to load session history");
     }
   };
 
   const handleStartNewChat = () => {
     setSessionId(undefined);
     setMessages([]);
-    setShowSessionsDropdown(false);
   };
 
   const handleSendMessage = async (promptText?: string) => {
@@ -99,223 +100,232 @@ export function ScheduleChatBot() {
       setSessionId(res.session_id);
       setMessages(res.messages);
       loadSessions();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to get response from Schedule Assistant");
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to get response from Schedule Assistant",
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <>
-      {/* Floating Trigger Button */}
-      <button
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className={cn(
-          "fixed bottom-6 right-6 z-40 flex items-center gap-2.5 rounded-full px-5 py-3.5 text-sm font-semibold shadow-2xl transition-all duration-300",
-          "bg-gradient-to-r from-indigo via-purple-600 to-cyan text-white hover:scale-105 active:scale-95",
-          "glow-indigo border border-cyan/40",
-          isOpen && "ring-2 ring-cyan ring-offset-2 ring-offset-background",
-        )}
-      >
-        <Sparkles className="size-5 animate-pulse text-cyan-200" />
-        <span className="tracking-wide">Schedule AI</span>
-      </button>
+    <div className="flex h-[calc(100vh-8.5rem)] min-h-[500px] w-full flex-col overflow-hidden rounded-2xl border border-glass-border bg-card/95 shadow-xl backdrop-blur-2xl">
+      {/* Complete Window Header */}
+      <div className="flex flex-wrap items-center justify-between border-b border-glass-border bg-secondary/30 px-6 py-4">
+        <div className="flex items-center gap-3.5">
+          <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo via-indigo/80 to-cyan text-white shadow-md shadow-indigo/20">
+            <Bot className="size-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
+                Schedule AI Workspace
+              </h2>
+              <Badge tone="cyan">
+                <Sparkles className="size-3 text-cyan inline mr-1" /> Gemini 2.5 AI
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Intelligent scheduling assistant with real-time clinic function calling
+            </p>
+          </div>
+        </div>
 
-      {/* Slide-Over Chatbot Drawer Overlay */}
-      {isOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-background/60 backdrop-blur-md transition-opacity animate-fade-in"
-            onClick={() => setIsOpen(false)}
-          />
+        <div className="flex items-center gap-2 mt-2 sm:mt-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSidebarOpen((prev) => !prev)}
+            className="text-xs gap-1.5"
+            title="Toggle Sessions Sidebar"
+          >
+            <History className="size-4 text-cyan" />
+            <span className="hidden md:inline">
+              {sidebarOpen ? "Hide History" : "Show History"}
+            </span>
+          </Button>
 
-          <div className="fixed inset-y-0 right-0 flex max-w-full pl-10">
-            <div className="w-screen max-w-md animate-slide-in-from-right">
-              <div className="flex h-full flex-col border-l border-glass-border bg-card/95 backdrop-blur-2xl shadow-2xl">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-glass-border p-4 bg-secondary/30">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo to-cyan text-white shadow-md">
-                      <Bot className="size-6" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground text-sm flex items-center gap-1.5">
-                        Schedule Assistant <Sparkles className="size-3.5 text-cyan" />
-                      </h3>
-                      <p className="text-[11px] text-muted-foreground">
-                        Gemini Function Calling · Live Clinic Data
-                      </p>
-                    </div>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleStartNewChat}
+            className="text-xs gap-1.5"
+          >
+            <MessageSquarePlus className="size-4" />
+            <span>New Chat</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Main Workspace Layout (Sidebar + Chat Area) */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Session History Sidebar Panel */}
+        {sidebarOpen && (
+          <aside className="w-64 sm:w-72 shrink-0 border-r border-glass-border bg-secondary/20 p-4 flex flex-col justify-between animate-fade-in">
+            <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <History className="size-3.5" /> Past Sessions
+                </span>
+                <button
+                  type="button"
+                  onClick={loadSessions}
+                  className="text-muted-foreground hover:text-cyan transition-colors"
+                  title="Refresh Sessions"
+                >
+                  <RefreshCw className="size-3.5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+                {sessions.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-muted-foreground italic border border-dashed border-glass-border rounded-xl">
+                    No previous chat sessions.
                   </div>
-
-                  <div className="flex items-center gap-1.5">
-                    {/* Session Selector Button */}
+                ) : (
+                  sessions.map((s) => (
                     <button
+                      key={s.session_id}
                       type="button"
-                      onClick={() => setShowSessionsDropdown((prev) => !prev)}
-                      className="rounded-xl border border-glass-border p-2 text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
-                      title="Chat History"
-                    >
-                      <History className="size-4" />
-                    </button>
-
-                    {/* New Chat Button */}
-                    <button
-                      type="button"
-                      onClick={handleStartNewChat}
-                      className="rounded-xl border border-glass-border p-2 text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
-                      title="New Chat"
-                    >
-                      <MessageSquarePlus className="size-4" />
-                    </button>
-
-                    {/* Close Panel Button */}
-                    <button
-                      type="button"
-                      onClick={() => setIsOpen(false)}
-                      className="rounded-xl border border-glass-border p-2 text-muted-foreground hover:bg-destructive/20 hover:text-destructive transition-all"
-                    >
-                      <X className="size-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Session Dropdown Drawer if open */}
-                {showSessionsDropdown && (
-                  <div className="border-b border-glass-border bg-secondary/40 p-3 space-y-2 animate-fade-in text-xs">
-                    <div className="flex items-center justify-between font-semibold text-muted-foreground px-1">
-                      <span>Past Chat Sessions</span>
-                      <button
-                        type="button"
-                        onClick={handleStartNewChat}
-                        className="text-cyan hover:underline flex items-center gap-1 text-[11px]"
-                      >
-                        + Start Fresh Session
-                      </button>
-                    </div>
-                    {sessions.length === 0 ? (
-                      <p className="p-2 text-muted-foreground italic">No prior chat sessions found.</p>
-                    ) : (
-                      <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
-                        {sessions.map((s) => (
-                          <button
-                            key={s.session_id}
-                            type="button"
-                            onClick={() => handleSelectSession(s.session_id)}
-                            className={cn(
-                              "w-full text-left p-2 rounded-xl transition-all flex items-center justify-between border",
-                              s.session_id === sessionId
-                                ? "bg-cyan/15 border-cyan/40 text-cyan font-medium"
-                                : "border-glass-border/40 hover:bg-secondary hover:border-glass-border text-foreground",
-                            )}
-                          >
-                            <span className="truncate max-w-[240px]">{s.title}</span>
-                            <ChevronRight className="size-3 shrink-0 opacity-60" />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Message Timeline Area */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {messages.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-4">
-                      <div className="size-16 rounded-3xl bg-cyan/10 border border-cyan/20 flex items-center justify-center text-cyan shadow-inner">
-                        <Bot className="size-8 animate-bounce" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-foreground text-base">
-                          How can I help with your schedule today?
-                        </h4>
-                        <p className="mt-1 text-xs text-muted-foreground leading-relaxed max-w-xs">
-                          Ask me about doctor rosters, daily appointment bookings, or date ranges.
-                        </p>
-                      </div>
-
-                      {/* Prompt Suggestions Chips */}
-                      <div className="w-full pt-4 space-y-2 text-left">
-                        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
-                          Suggested Prompts:
-                        </span>
-                        <div className="flex flex-col gap-2">
-                          {SUGGESTED_PROMPTS.map((prompt) => (
-                            <button
-                              key={prompt}
-                              type="button"
-                              onClick={() => handleSendMessage(prompt)}
-                              className="text-xs p-2.5 rounded-xl border border-glass-border bg-secondary/30 text-foreground hover:border-cyan/50 hover:bg-secondary/60 transition-all text-left flex items-center justify-between group"
-                            >
-                              <span>{prompt}</span>
-                              <ChevronRight className="size-3.5 text-cyan opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    messages.map((msg, idx) => (
-                      <ChatMessage key={msg.message_id || idx} message={msg} />
-                    ))
-                  )}
-
-                  {/* Loading Assistant Bubble */}
-                  {loading && (
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground animate-pulse p-2">
-                      <div className="flex size-8 items-center justify-center rounded-xl bg-indigo/15 border border-indigo/40 text-indigo">
-                        <Loader2 className="size-4 animate-spin" />
-                      </div>
-                      <span>Gemini is checking schedule tools & querying data…</span>
-                    </div>
-                  )}
-
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Input Controls Footer */}
-                <div className="border-t border-glass-border p-4 bg-secondary/20 space-y-2">
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }}
-                    className="flex items-center gap-2"
-                  >
-                    <input
-                      type="text"
-                      value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
-                      placeholder="Ask about schedule, appointments..."
-                      disabled={loading}
-                      className="flex-1 rounded-2xl border border-input bg-secondary/40 px-4 py-2.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:border-cyan/60 focus:outline-none focus:ring-2 focus:ring-ring/40"
-                    />
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="sm"
-                      disabled={!inputMessage.trim() || loading}
-                      className="rounded-2xl px-4 py-2.5 h-auto"
-                    >
-                      {loading ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Send className="size-4" />
+                      onClick={() => handleSelectSession(s.session_id)}
+                      className={cn(
+                        "w-full text-left p-3 rounded-xl transition-all flex items-center justify-between border text-xs group",
+                        s.session_id === sessionId
+                          ? "bg-indigo/15 border-indigo/40 text-indigo font-semibold shadow-sm"
+                          : "border-glass-border/60 hover:bg-secondary/60 hover:border-glass-border text-foreground",
                       )}
-                    </Button>
-                  </form>
-                  <p className="text-[10px] text-center text-muted-foreground/60">
-                    Security enforced: Doctor & owner scopes strictly validated per tool call.
+                    >
+                      <div className="flex flex-col min-w-0 pr-2">
+                        <span className="truncate">{s.title || "Schedule Session"}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(s.created_at).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                      <ChevronRight className="size-3.5 shrink-0 opacity-40 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-glass-border/70 text-[11px] text-muted-foreground flex items-center gap-2">
+              <ShieldCheck className="size-4 text-cyan shrink-0" />
+              <span>Role-scoped tool execution enabled.</span>
+            </div>
+          </aside>
+        )}
+
+        {/* Central Chat Workspace */}
+        <div className="flex flex-1 flex-col min-w-0 bg-background/40">
+          {/* Message Stream */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+            {messages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-6 max-w-xl mx-auto">
+                <div className="relative">
+                  <div className="size-20 rounded-3xl bg-gradient-to-tr from-indigo/20 to-cyan/20 border border-indigo/30 flex items-center justify-center text-indigo shadow-lg">
+                    <Bot className="size-10 text-cyan animate-pulse" />
+                  </div>
+                  <span className="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full bg-success text-[10px] font-bold text-white shadow">
+                    ✓
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="text-xl font-bold text-foreground tracking-tight">
+                    Schedule AI Assistant
+                  </h3>
+                  <p className="mt-2 text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                    Ask me anything about daily schedules, doctor rosters, available appointment slots, or patient bookings.
                   </p>
                 </div>
+
+                {/* Prompt Suggestions Grid */}
+                <div className="w-full space-y-3 pt-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Quick Suggestions:
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {SUGGESTED_PROMPTS.map((prompt) => (
+                      <button
+                        key={prompt}
+                        type="button"
+                        onClick={() => handleSendMessage(prompt)}
+                        className="text-xs p-3 rounded-xl border border-glass-border bg-card/60 text-foreground hover:border-cyan/50 hover:bg-secondary/60 transition-all text-left flex items-center justify-between group shadow-sm"
+                      >
+                        <span className="font-medium">{prompt}</span>
+                        <ChevronRight className="size-4 text-cyan opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
+            ) : (
+              messages.map((msg, idx) => (
+                <ChatMessage key={msg.message_id || idx} message={msg} />
+              ))
+            )}
+
+            {/* Loading Assistant State */}
+            {loading && (
+              <div className="flex items-center gap-3 text-xs text-muted-foreground animate-pulse p-3 rounded-xl bg-indigo/5 border border-indigo/20 max-w-md">
+                <div className="flex size-8 items-center justify-center rounded-xl bg-indigo/20 border border-indigo/40 text-indigo">
+                  <Loader2 className="size-4 animate-spin" />
+                </div>
+                <span>Gemini is running function calls & analyzing clinic data…</span>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Prompt Input Box */}
+          <div className="border-t border-glass-border p-4 bg-secondary/30 space-y-2">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendMessage();
+              }}
+              className="flex items-center gap-3"
+            >
+              <input
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                placeholder="Ask Schedule AI about doctor rosters, slots, or appointments..."
+                disabled={loading}
+                className="flex-1 rounded-2xl border border-input bg-card/90 px-4 py-3 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-cyan/60 focus:outline-none focus:ring-2 focus:ring-ring/40 shadow-inner"
+              />
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={!inputMessage.trim() || loading}
+                className="rounded-2xl px-5 py-3 h-auto gap-2"
+              >
+                {loading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <>
+                    <span>Send</span>
+                    <Send className="size-4" />
+                  </>
+                )}
+              </Button>
+            </form>
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground px-2">
+              <span>Press Enter to send message</span>
+              <span className="text-cyan font-medium">Live Gemini Function Calling</span>
             </div>
           </div>
         </div>
-      )}
-    </>
+      </div>
+    </div>
   );
 }
+

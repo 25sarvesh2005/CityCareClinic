@@ -1,6 +1,15 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Users, Plus, Stethoscope, Mail, DollarSign, CheckCircle, Search, CalendarOff } from "lucide-react";
+import {
+  Users,
+  Plus,
+  Stethoscope,
+  Mail,
+  DollarSign,
+  CheckCircle,
+  Search,
+  CalendarOff,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { RoleGuard } from "@/components/RoleGuard";
 import { useToast } from "@/components/Toaster";
@@ -38,20 +47,20 @@ function DoctorsContent() {
     consultation_fee: "Rs. 300",
   });
 
-  async function loadDoctors() {
+  const loadDoctors = useCallback(async () => {
     try {
       const data = await api.listOwnerDoctors();
       setDoctors(data);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to load doctors");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to load doctors");
     } finally {
       setLoading(false);
     }
-  }
+  }, [toast]);
 
   useEffect(() => {
     loadDoctors();
-  }, []);
+  }, [loadDoctors]);
 
   async function handleCreateDoctor(e: React.FormEvent) {
     e.preventDefault();
@@ -78,8 +87,8 @@ function DoctorsContent() {
       });
       setShowAddForm(false);
       await loadDoctors();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create doctor account");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to create doctor account");
     } finally {
       setBusy(false);
     }
@@ -88,12 +97,10 @@ function DoctorsContent() {
   async function handleToggleDoctorStatus(profileId: string, currentActive: boolean) {
     try {
       await api.setDoctorStatus(profileId, { is_active: !currentActive });
-      toast.success(
-        `Doctor profile ${!currentActive ? "activated" : "deactivated"} successfully.`,
-      );
+      toast.success(`Doctor profile ${!currentActive ? "activated" : "deactivated"} successfully.`);
       await loadDoctors();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update doctor status.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update doctor status.");
     }
   }
 
@@ -118,7 +125,9 @@ function DoctorsContent() {
           <span className="text-xs font-semibold uppercase tracking-wider text-cyan">
             Hospital Administration
           </span>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Doctor Roster & Off-Days</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            Doctor Roster & Off-Days
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Manage provisioned doctors, review individual off-day records, and set active status.
           </p>
@@ -184,7 +193,9 @@ function DoctorsContent() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass-border pb-4">
           <div className="flex items-center gap-3">
             <Users className="size-5 text-cyan" />
-            <h2 className="text-lg font-semibold text-foreground">Doctor Roster ({filteredDoctors.length})</h2>
+            <h2 className="text-lg font-semibold text-foreground">
+              Doctor Roster ({filteredDoctors.length})
+            </h2>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -205,7 +216,9 @@ function DoctorsContent() {
               <button
                 type="button"
                 className={`px-2.5 py-1 rounded-lg transition-all ${
-                  filterMode === "all" ? "bg-cyan text-cyan-foreground font-bold" : "text-muted-foreground hover:text-foreground"
+                  filterMode === "all"
+                    ? "bg-cyan text-cyan-foreground font-bold"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
                 onClick={() => setFilterMode("all")}
               >
@@ -214,7 +227,9 @@ function DoctorsContent() {
               <button
                 type="button"
                 className={`px-2.5 py-1 rounded-lg transition-all ${
-                  filterMode === "active" ? "bg-cyan text-cyan-foreground font-bold" : "text-muted-foreground hover:text-foreground"
+                  filterMode === "active"
+                    ? "bg-cyan text-cyan-foreground font-bold"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
                 onClick={() => setFilterMode("active")}
               >
@@ -223,7 +238,9 @@ function DoctorsContent() {
               <button
                 type="button"
                 className={`px-2.5 py-1 rounded-lg transition-all ${
-                  filterMode === "off_days" ? "bg-cyan text-cyan-foreground font-bold" : "text-muted-foreground hover:text-foreground"
+                  filterMode === "off_days"
+                    ? "bg-cyan text-cyan-foreground font-bold"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
                 onClick={() => setFilterMode("off_days")}
               >
@@ -278,7 +295,9 @@ function DoctorsContent() {
                           </span>
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground italic">No off-days marked</span>
+                        <span className="text-xs text-muted-foreground italic">
+                          No off-days marked
+                        </span>
                       )}
                     </td>
                     <td className="py-3 px-4">
