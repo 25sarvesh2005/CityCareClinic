@@ -171,6 +171,18 @@ async def set_hospital_owner_id(
     return updated
 
 
+async def set_hospital_patient_services(
+    engine: AIOEngine,
+    hospital: HospitalModel,
+    facilities: list[str],
+    services: list[str],
+) -> HospitalModel:
+    """Update patient-visible facilities and services for one hospital."""
+    hospital.facilities = facilities
+    hospital.services = services
+    return await engine.save(hospital)
+
+
 async def count_total_hospitals(engine: AIOEngine) -> int:
     """Count total hospitals registered on the platform."""
     return await engine.count(HospitalModel)
@@ -184,4 +196,3 @@ async def count_active_hospitals(engine: AIOEngine) -> int:
 async def count_approved_hospitals(engine: AIOEngine) -> int:
     """Count hospitals where is_approved is True."""
     return await engine.count(HospitalModel, HospitalModel.is_approved == True)
-

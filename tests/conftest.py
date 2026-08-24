@@ -16,6 +16,12 @@ from core.models.appointment_model import AppointmentModel
 from core.models.hospital_model import HospitalModel
 from core.models.doctor_profile_model import DoctorProfileModel
 from core.models.prescription_model import PrescriptionModel
+from telegram_bot.models import (
+    TelegramLinkCodeModel,
+    TelegramMessageModel,
+    TelegramSessionModel,
+    TelegramUpdateModel,
+)
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -31,7 +37,18 @@ async def setup_db():
     engine = get_engine()
 
     # Clean all collections before each test run
-    for model in (UserModel, AppointmentModel, HospitalModel, DoctorProfileModel, PrescriptionModel):
+    models = (
+        UserModel,
+        AppointmentModel,
+        HospitalModel,
+        DoctorProfileModel,
+        PrescriptionModel,
+        TelegramSessionModel,
+        TelegramMessageModel,
+        TelegramLinkCodeModel,
+        TelegramUpdateModel,
+    )
+    for model in models:
         try:
             await engine.remove(model)
         except Exception:
@@ -43,7 +60,7 @@ async def setup_db():
     yield engine
 
     # Clean up and close connection after test
-    for model in (UserModel, AppointmentModel, HospitalModel, DoctorProfileModel, PrescriptionModel):
+    for model in models:
         try:
             await engine.remove(model)
         except Exception:

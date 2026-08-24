@@ -15,7 +15,7 @@ Used By:
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -60,6 +60,16 @@ class CreateHospitalRequest(BaseModel):
         max_length=20,
         description="Primary contact phone number.",
         examples=["+91-20-1234-5678"],
+    )
+    facilities: List[str] = Field(
+        default_factory=list,
+        max_length=50,
+        description="Patient-visible facilities such as ICU, pharmacy, or diagnostics.",
+    )
+    services: List[str] = Field(
+        default_factory=list,
+        max_length=50,
+        description="Patient-visible clinical services offered by the hospital.",
     )
 
 
@@ -116,6 +126,13 @@ class SetHospitalStatusRequest(BaseModel):
     )
 
 
+class UpdateHospitalServicesRequest(BaseModel):
+    """Patient-visible facilities and clinical services for gateway surfaces."""
+
+    facilities: List[str] = Field(default_factory=list, max_length=50)
+    services: List[str] = Field(default_factory=list, max_length=50)
+
+
 # ─── Response Schemas ─────────────────────────────────────────────────────────
 
 
@@ -132,6 +149,8 @@ class HospitalResponse(BaseModel):
     address: str = Field(..., description="Street address.")
     city: str = Field(..., description="City.")
     contact_number: str = Field(..., description="Primary contact phone number.")
+    facilities: List[str] = Field(default_factory=list)
+    services: List[str] = Field(default_factory=list)
     owner_id: str = Field(
         ...,
         description=(
@@ -211,4 +230,3 @@ class HospitalStatsResponse(BaseModel):
     upcoming_appointments: int = Field(..., description="Upcoming active appointments.")
     is_active: bool = Field(..., description="Whether the hospital is active.")
     is_approved: bool = Field(..., description="Whether the hospital is approved.")
-

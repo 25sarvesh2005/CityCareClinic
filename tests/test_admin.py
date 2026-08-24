@@ -312,3 +312,31 @@ async def test_get_hospital_stats_admin(async_client, super_admin_token):
     assert "total_doctors" in data
     assert "todays_appointments" in data
 
+
+@pytest.mark.asyncio
+async def test_super_admin_can_publish_patient_visible_services(
+    async_client, super_admin_token
+):
+    """Facilities used by Telegram can be configured without editing the web app."""
+    hospital_response = await async_client.post(
+        "/api/v1/admin/hospitals",
+        json={
+            "name": "Gateway Services Hospital",
+            "address": "12 Gateway Road",
+            "city": "Pune",
+            "contact_number": "+91-20-7777-8888",
+        },
+        headers={"Authorization": f"Bearer {super_admin_token}"},
+    )
+    hospital_id = hospital_response.json()["hospital_id"]
+    response = await async_client.patch(
+        f"/api/v1/admin/hospitals/{hospital_id}/services",
+        json={
+            "facilities": ["24/7 Pharmacy", "Diagnostic Lab"],
+            "services": ["Cardiology", "Vaccination"],
+        },
+        headers={"Authorization": f"Bearer {super_admin_token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["facilities"] == ["24/7 Pharmacy", "Diagnostic Lab"]
+    assert response.json()["services"] == ["Cardiology", "Vaccination"]

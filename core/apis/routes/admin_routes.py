@@ -40,6 +40,7 @@ from core.apis.schemas.admin_schema import (
     HospitalStatsResponse,
     PlatformStatsResponse,
     SetHospitalStatusRequest,
+    UpdateHospitalServicesRequest,
 )
 from core.controllers.admin_controller import AdminController
 
@@ -203,6 +204,39 @@ async def set_hospital_status(
         )
 
 
+@router.patch(
+    "/v1/admin/hospitals/{hospital_id}/services",
+    response_model=HospitalResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update patient-visible hospital facilities and services",
+)
+async def update_hospital_services(
+    hospital_id: str,
+    request: UpdateHospitalServicesRequest,
+    admin_user: dict = Depends(require_super_admin),
+) -> HospitalResponse:
+    """Publish the facilities and clinical services shown by patient gateways."""
+    try:
+        return await AdminController().update_hospital_services(
+            hospital_id=hospital_id,
+            request=request,
+            admin_user=admin_user,
+        )
+    except HTTPException:
+        raise
+    except Exception as error:
+        logging.error(
+            "Failed to update services for hospital '%s': %s",
+            hospital_id,
+            str(error),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Something Went Wrong",
+        )
+
+
 @router.get(
     "/v1/admin/hospitals",
     response_model=List[HospitalListResponse],
@@ -317,4 +351,3 @@ async def get_hospital_stats_admin(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Something Went Wrong",
         )
-

@@ -83,6 +83,26 @@ async def connect_to_database() -> None:
     _motor_client = AsyncIOMotorClient(mongo_url)
     _odmantic_engine = AIOEngine(client=_motor_client, database=database_name)
 
+    # Telegram identity and delivery guarantees depend on database-enforced
+    # uniqueness/TTL indexes, not only application-level checks.
+    from core.models.user_model import UserModel
+    from telegram_bot.models import (
+        TelegramLinkCodeModel,
+        TelegramMessageModel,
+        TelegramSessionModel,
+        TelegramUpdateModel,
+    )
+
+    await _odmantic_engine.configure_database(
+        [
+            UserModel,
+            TelegramSessionModel,
+            TelegramMessageModel,
+            TelegramLinkCodeModel,
+            TelegramUpdateModel,
+        ]
+    )
+
     logger.info("Database connection established successfully")
 
 

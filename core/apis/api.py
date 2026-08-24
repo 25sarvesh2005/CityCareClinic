@@ -12,6 +12,7 @@ from core.apis.routes.auth_routes import router as auth_router
 from core.apis.routes.doctor_routes import router as doctor_router
 from core.apis.routes.hospital_routes import router as hospital_router
 from core.apis.routes.prescription_routes import router as prescription_router
+from telegram_bot.routes import router as telegram_router
 
 api_router = APIRouter(prefix="/api")
 
@@ -23,3 +24,4 @@ api_router.include_router(admin_router)
 api_router.include_router(hospital_router)
 api_router.include_router(prescription_router)
 api_router.include_router(chat_router)
+api_router.include_router(telegram_router)

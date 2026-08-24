@@ -42,6 +42,7 @@ from core.apis.schemas.admin_schema import (
     HospitalStatsResponse,
     PlatformStatsResponse,
     SetHospitalStatusRequest,
+    UpdateHospitalServicesRequest,
 )
 from core.constants import UserRole
 from core.cruds.appointment_crud import (
@@ -66,6 +67,7 @@ from core.cruds.hospital_crud import (
     set_hospital_active_status,
     set_hospital_approved_status,
     set_hospital_owner_id,
+    set_hospital_patient_services,
 )
 from core.cruds.user_crud import count_all_patients, create_user, find_user_by_email
 from core.database.database import get_engine
@@ -108,6 +110,8 @@ class AdminController:
             address=request.address.strip(),
             city=request.city.strip(),
             contact_number=request.contact_number.strip(),
+            facilities=[item.strip() for item in request.facilities if item.strip()],
+            services=[item.strip() for item in request.services if item.strip()],
             owner_id="",  # Populated when create_hospital_owner is called
             is_active=True,
             is_approved=False,
@@ -141,6 +145,8 @@ class AdminController:
             address=saved.address,
             city=saved.city,
             contact_number=saved.contact_number,
+            facilities=saved.facilities,
+            services=saved.services,
             owner_id=saved.owner_id,
             is_active=saved.is_active,
             is_approved=saved.is_approved,
@@ -303,11 +309,52 @@ class AdminController:
             address=hospital.address,
             city=hospital.city,
             contact_number=hospital.contact_number,
+            facilities=hospital.facilities,
+            services=hospital.services,
             owner_id=hospital.owner_id,
             is_active=hospital.is_active,
             is_approved=hospital.is_approved,
             created_at=hospital.created_at,
             message=f"Hospital has been {action} successfully.",
+        )
+
+    async def update_hospital_services(
+        self,
+        hospital_id: str,
+        request: UpdateHospitalServicesRequest,
+        admin_user: dict,
+    ) -> HospitalResponse:
+        """Publish patient-visible facilities and services for a hospital."""
+        engine = get_engine()
+        hospital = await find_hospital_by_id(engine, hospital_id)
+        if not hospital:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Hospital '{hospital_id}' not found.",
+            )
+        facilities = [item.strip() for item in request.facilities if item.strip()]
+        services = [item.strip() for item in request.services if item.strip()]
+        hospital = await set_hospital_patient_services(
+            engine, hospital, facilities, services
+        )
+        logger.info(
+            "Hospital patient services updated — hospital_id: '%s', by admin: '%s'",
+            hospital_id,
+            admin_user.get("email"),
+        )
+        return HospitalResponse(
+            hospital_id=str(hospital.id),
+            name=hospital.name,
+            address=hospital.address,
+            city=hospital.city,
+            contact_number=hospital.contact_number,
+            facilities=hospital.facilities,
+            services=hospital.services,
+            owner_id=hospital.owner_id,
+            is_active=hospital.is_active,
+            is_approved=hospital.is_approved,
+            created_at=hospital.created_at,
+            message="Hospital facilities and services updated successfully.",
         )
 
     async def list_hospitals(self) -> List[HospitalListResponse]:
@@ -394,4 +441,3 @@ class AdminController:
             is_active=hospital.is_active,
             is_approved=hospital.is_approved,
         )
-
