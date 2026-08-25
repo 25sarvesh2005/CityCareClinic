@@ -55,9 +55,22 @@ logger = get_logger(__name__)
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
-JWT_SECRET: str = os.getenv("JWT_SECRET", "your-super-secret-key-change-in-production")
-JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
+from common.config import (
+    get_jwt_algorithm,
+    get_jwt_expire_minutes,
+    get_jwt_secret,
+)
+
+
+def __getattr__(name: str):
+    if name == "JWT_SECRET":
+        return get_jwt_secret()
+    if name == "JWT_ALGORITHM":
+        return get_jwt_algorithm()
+    if name == "JWT_EXPIRE_MINUTES":
+        return get_jwt_expire_minutes()
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
 
 import bcrypt
 
@@ -122,12 +135,15 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         str: A signed JWT string ready to be sent to the client.
     """
     payload = data.copy()
+    expire_mins = get_jwt_expire_minutes()
     expiry = datetime.now(timezone.utc) + (
-        expires_delta if expires_delta else timedelta(minutes=JWT_EXPIRE_MINUTES)
+        expires_delta if expires_delta else timedelta(minutes=expire_mins)
     )
     payload.update({"exp": expiry})
 
-    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    secret = get_jwt_secret()
+    algorithm = get_jwt_algorithm()
+    token = jwt.encode(payload, secret, algorithm=algorithm)
     logger.debug("Access token created for subject: %s", data.get("user_id"))
     return token
 
@@ -137,7 +153,9 @@ def decode_jwt(token: str) -> Optional[dict]:
     Decode a JWT access token safely, returning payload dictionary on success or None on failure.
     """
     try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        secret = get_jwt_secret()
+        algorithm = get_jwt_algorithm()
+        return jwt.decode(token, secret, algorithms=[algorithm])
     except JWTError:
         return None
 
@@ -160,7 +178,9 @@ def decode_access_token(token: str) -> dict:
         HTTPException 401: If the token is expired, malformed, or invalid.
     """
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        secret = get_jwt_secret()
+        algorithm = get_jwt_algorithm()
+        payload = jwt.decode(token, secret, algorithms=[algorithm])
         return payload
     except JWTError as error:
         logger.warning("Token decoding failed: %s", str(error))
@@ -169,6 +189,7 @@ def decode_access_token(token: str) -> dict:
             detail="Invalid or expired token. Please log in again.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
 
 
 # ─── FastAPI Dependencies ─────────────────────────────────────────────────────

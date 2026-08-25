@@ -1,42 +1,7 @@
 """
-─────────────────────────────────────────────────────────────────────────────
 File        : core/database/database.py
 Purpose     : Singleton database connection manager for CityCare Clinic.
               Manages the Motor async client and the ODMantic Engine instance.
-
-Responsibilities:
-    - Initialize the Motor AsyncIOMotorClient on application startup
-    - Provide the ODMantic Engine as a singleton via get_engine()
-    - Ensure indexes defined on models are created in MongoDB
-    - Cleanly close the connection on application shutdown
-
-Flow:
-    Application startup (lifespan)
-        ↓
-    connect_to_database() — creates client + engine
-        ↓
-    get_engine() — injected into CRUD functions
-        ↓
-    Application shutdown (lifespan)
-        ↓
-    close_database_connection() — closes Motor client
-
-Used By:
-    - main.py (lifespan events)
-    - core/cruds/*.py (via get_engine())
-
-Returns:
-    get_engine() → AIOEngine — the active ODMantic async engine instance.
-
-Raises:
-    RuntimeError: If get_engine() is called before connect_to_database().
-
-Example:
-    from core.database.database import get_engine
-
-    engine = get_engine()
-    result = await engine.find_one(UserModel, UserModel.email == email)
-─────────────────────────────────────────────────────────────────────────────
 """
 
 import os
@@ -45,66 +10,84 @@ from typing import Optional
 from motor.motor_asyncio import AsyncIOMotorClient
 from odmantic import AIOEngine
 
+from common.config import get_db_name, get_mongo_url
 from common.logger import get_logger
-
-# ─── Logger ───────────────────────────────────────────────────────────────────
 
 logger = get_logger(__name__)
 
-# ─── Singleton State ──────────────────────────────────────────────────────────
+# ─── Singleton State ───────────────────────────────────────────────────────────
 
 _motor_client: Optional[AsyncIOMotorClient] = None
 _odmantic_engine: Optional[AIOEngine] = None
 
 
-# ─── Lifecycle Functions ──────────────────────────────────────────────────────
+# ─── Lifecycle Functions ───────────────────────────────────────────────────────
 
 
 async def connect_to_database() -> None:
     """
     Initialize the Motor client and ODMantic Engine on application startup.
 
-    Reads MONGO_URL and DB_NAME from environment variables.
+    Reads MONGO_URL and DB_NAME from environment variables via common.config.
+    Pings MongoDB to ensure early failure on broken connection.
     Sets the module-level singletons so get_engine() can serve them.
-
-    Returns:
-        None
-
-    Raises:
-        Exception: Propagates any Motor connection failure to the caller.
     """
     global _motor_client, _odmantic_engine
 
-    mongo_url: str = os.getenv("MONGO_URL", "mongodb://localhost:27017")
-    database_name: str = os.getenv("DB_NAME", "citycare_clinic")
+    mongo_url: str = get_mongo_url()
+    database_name: str = get_db_name()
 
-    # Never log MONGO_URL: Atlas URIs commonly contain database credentials.
+    # Never log MONGO_URL or connection string credentials.
     logger.info("Connecting to MongoDB database: %s", database_name)
 
-    _motor_client = AsyncIOMotorClient(mongo_url)
-    _odmantic_engine = AIOEngine(client=_motor_client, database=database_name)
+    try:
+        _motor_client = AsyncIOMotorClient(
+            mongo_url,
+            serverSelectionTimeoutMS=5000,
+            connectTimeoutMS=5000,
+        )
 
-    # Telegram identity and delivery guarantees depend on database-enforced
-    # uniqueness/TTL indexes, not only application-level checks.
-    from core.models.user_model import UserModel
-    from telegram_bot.models import (
-        TelegramLinkCodeModel,
-        TelegramMessageModel,
-        TelegramSessionModel,
-        TelegramUpdateModel,
-    )
+        # Early ping check to fail fast if MongoDB is unreachable
+        await _motor_client.admin.command("ping")
 
-    await _odmantic_engine.configure_database(
-        [
-            UserModel,
-            TelegramSessionModel,
-            TelegramMessageModel,
+        _odmantic_engine = AIOEngine(client=_motor_client, database=database_name)
+
+        # Telegram identity and delivery guarantees depend on database-enforced
+        # uniqueness/TTL indexes, not only application-level checks.
+        from core.models.user_model import UserModel
+        from telegram_bot.models import (
             TelegramLinkCodeModel,
+            TelegramMessageModel,
+            TelegramSessionModel,
             TelegramUpdateModel,
-        ]
-    )
+        )
 
-    logger.info("Database connection established successfully")
+        await _odmantic_engine.configure_database(
+            [
+                UserModel,
+                TelegramSessionModel,
+                TelegramMessageModel,
+                TelegramLinkCodeModel,
+                TelegramUpdateModel,
+            ]
+        )
+
+        logger.info("Database connection established successfully")
+    except Exception as exc:
+        # Never log str(exc), repr(exc), or exc_info as Mongo exceptions can contain credentials/hosts.
+        logger.error(
+            "Failed to connect to MongoDB database '%s': %s",
+            database_name,
+            exc.__class__.__name__,
+        )
+        if _motor_client is not None:
+            try:
+                _motor_client.close()
+            except Exception:
+                pass
+        _motor_client = None
+        _odmantic_engine = None
+        raise
 
 
 async def close_database_connection() -> None:
@@ -113,35 +96,27 @@ async def close_database_connection() -> None:
 
     Resets both singletons to None to allow clean re-initialization
     if the application is restarted within the same process.
-
-    Returns:
-        None
+    Idempotent: safe to call multiple times.
     """
     global _motor_client, _odmantic_engine
 
     if _motor_client is not None:
-        _motor_client.close()
+        try:
+            _motor_client.close()
+        except Exception:
+            pass
         logger.info("Database connection closed")
 
     _motor_client = None
     _odmantic_engine = None
 
 
-# ─── Engine Accessor ──────────────────────────────────────────────────────────
+# ─── Engine Accessor ───────────────────────────────────────────────────────────
 
 
 def get_engine() -> AIOEngine:
     """
     Return the active ODMantic Engine singleton.
-
-    Must only be called after connect_to_database() has been awaited.
-    CRUD functions call this at the top of every database operation.
-
-    Returns:
-        AIOEngine: The active ODMantic async engine.
-
-    Raises:
-        RuntimeError: If called before connect_to_database().
     """
     if _odmantic_engine is None:
         raise RuntimeError(

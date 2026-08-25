@@ -17,11 +17,17 @@ DEFAULT_PDF_PATH = os.path.join(
     "RAG",
     "CityCare-Clinic-Patient-Handbook.pdf",
 )
-CHROMA_PERSIST_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "data",
-    "chroma_db",
-)
+def get_chroma_persist_dir() -> str:
+    override = os.getenv("CHROMA_PERSIST_DIR")
+    if override:
+        return override
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "data",
+        "chroma_db",
+    )
+
+
 COLLECTION_NAME = "clinic_handbook"
 
 
@@ -57,12 +63,13 @@ def get_vector_store():
         from langchain_community.vectorstores import Chroma
 
     embeddings = get_embeddings()
-    os.makedirs(CHROMA_PERSIST_DIR, exist_ok=True)
+    persist_dir = get_chroma_persist_dir()
+    os.makedirs(persist_dir, exist_ok=True)
 
     vector_store = Chroma(
         collection_name=COLLECTION_NAME,
         embedding_function=embeddings,
-        persist_directory=CHROMA_PERSIST_DIR,
+        persist_directory=persist_dir,
     )
     return vector_store
 
