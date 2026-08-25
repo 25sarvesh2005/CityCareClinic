@@ -6,8 +6,10 @@ production configuration validation without architectural rewrites.
 """
 
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlsplit
+
 from dotenv import load_dotenv
 
 # Resolve project root path (directory containing main.py and .env)
@@ -83,9 +85,16 @@ def get_jwt_algorithm() -> str:
 def get_jwt_expire_minutes() -> int:
     """Return the JWT token expiry in minutes."""
     try:
-        return int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
-    except ValueError:
-        return 60
+        expire_minutes = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "JWT_EXPIRE_MINUTES must be a positive integer between 1 and 525600."
+        ) from exc
+    if not 1 <= expire_minutes <= 525600:
+        raise ValueError(
+            "JWT_EXPIRE_MINUTES must be a positive integer between 1 and 525600."
+        )
+    return expire_minutes
 
 
 def should_seed_demo_users() -> bool:
@@ -106,13 +115,13 @@ def parse_and_validate_cors_origin(origin: str, is_prod: bool) -> str:
     origin = origin.strip()
     if not origin:
         raise ValueError("CORS origin cannot be empty.")
+    if any(character.isspace() for character in origin):
+        raise ValueError("CORS origin cannot contain whitespace.")
 
     if origin == "*":
-        if is_prod:
-            raise ValueError(
-                "Production configuration error: Wildcard '*' origin is forbidden in CORS_ALLOWED_ORIGINS when credentials are enabled."
-            )
-        return "*"
+        raise ValueError(
+            "Wildcard '*' is forbidden in CORS_ALLOWED_ORIGINS when credentials are enabled."
+        )
 
     parsed = urlsplit(origin)
 
@@ -124,6 +133,11 @@ def parse_and_validate_cors_origin(origin: str, is_prod: bool) -> str:
 
     if not parsed.netloc or not parsed.hostname:
         raise ValueError(f"Invalid CORS origin netloc/hostname in '{origin}'.")
+
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError(f"Invalid CORS origin port in '{origin}'.") from exc
 
     if parsed.username or parsed.password:
         raise ValueError(f"CORS origin cannot contain user credentials in '{origin}'.")
@@ -137,7 +151,11 @@ def parse_and_validate_cors_origin(origin: str, is_prod: bool) -> str:
     if parsed.fragment:
         raise ValueError(f"CORS origin cannot contain a fragment in '{origin}'.")
 
-    return f"{parsed.scheme}://{parsed.netloc}"
+    hostname = parsed.hostname
+    authority = f"[{hostname}]" if ":" in hostname else hostname
+    if port is not None:
+        authority = f"{authority}:{port}"
+    return f"{parsed.scheme}://{authority}"
 
 
 def get_cors_origins() -> list[str]:
@@ -180,12 +198,7 @@ def get_cors_origins() -> list[str]:
 def validate_jwt_config(env: str) -> None:
     """Validate JWT configuration settings."""
     # 1. Expiry minutes validation
-    try:
-        expire_mins = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
-        if expire_mins <= 0 or expire_mins > 525600:
-            raise ValueError()
-    except ValueError:
-        raise ValueError("JWT_EXPIRE_MINUTES must be a positive integer between 1 and 525600.")
+    get_jwt_expire_minutes()
 
     # 2. Algorithm validation
     alg = os.getenv("JWT_ALGORITHM", "HS256").strip().upper()
@@ -230,10 +243,10 @@ def validate_config() -> None:
     # In production, enforce strict requirements
     if env == "production":
         # 1. MongoDB requirements
-        if not os.getenv("MONGO_URL"):
+        if not os.getenv("MONGO_URL", "").strip():
             raise ValueError("Production configuration error: MONGO_URL must be explicitly configured.")
 
-        if not os.getenv("DB_NAME"):
+        if not os.getenv("DB_NAME", "").strip():
             raise ValueError("Production configuration error: DB_NAME must be explicitly configured.")
 
         # 2. Demo user seeding prohibition
@@ -254,9 +267,28 @@ def validate_config() -> None:
                 raise ValueError(
                     "Production configuration error: TELEGRAM_WEBHOOK_SECRET is required when webhook mode is used."
                 )
-            if not webhook_url.startswith("https://"):
+            parsed_webhook = urlsplit(webhook_url)
+            try:
+                parsed_webhook.port
+            except ValueError as exc:
                 raise ValueError(
-                    "Production configuration error: TELEGRAM_PUBLIC_WEBHOOK_URL must use HTTPS in production."
+                    "Production configuration error: TELEGRAM_PUBLIC_WEBHOOK_URL contains an invalid port."
+                ) from exc
+            if (
+                parsed_webhook.scheme != "https"
+                or not parsed_webhook.hostname
+                or parsed_webhook.username
+                or parsed_webhook.password
+                or parsed_webhook.query
+                or parsed_webhook.fragment
+                or parsed_webhook.path != "/api/v1/telegram/webhook"
+            ):
+                raise ValueError(
+                    "Production configuration error: TELEGRAM_PUBLIC_WEBHOOK_URL must be a valid HTTPS URL ending in /api/v1/telegram/webhook."
+                )
+            if not re.fullmatch(r"[A-Za-z0-9_-]{1,256}", webhook_secret):
+                raise ValueError(
+                    "Production configuration error: TELEGRAM_WEBHOOK_SECRET contains unsupported characters or length."
                 )
 
         # 4. CORS origins validation

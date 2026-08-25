@@ -86,4 +86,5 @@ async def seed_initial_users() -> None:
             logger.debug("Super Admin account already present: %s", admin_email)
 
     except Exception as exc:
-        logger.error("Failed to seed initial users: %s", str(exc), exc_info=True)
+        # Database exceptions can contain connection details or submitted data.
+        logger.error("Failed to seed initial users: %s", exc.__class__.__name__)

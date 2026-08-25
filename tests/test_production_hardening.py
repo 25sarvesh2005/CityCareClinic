@@ -20,6 +20,7 @@ import pytest
 from common.config import (
     get_app_env,
     get_cors_origins,
+    get_jwt_expire_minutes,
     get_jwt_secret,
     parse_and_validate_cors_origin,
     should_seed_demo_users,
@@ -114,6 +115,14 @@ def test_jwt_expiry_minutes_validation():
             assert "JWT_EXPIRE_MINUTES" in str(exc_info.value)
 
 
+@pytest.mark.parametrize("invalid_val", ["0", "-10", "abc", "600000"])
+def test_jwt_expiry_getter_never_silently_falls_back(invalid_val):
+    """Direct consumers cannot bypass invalid expiry configuration."""
+    with patch.dict(os.environ, {"JWT_EXPIRE_MINUTES": invalid_val}, clear=False):
+        with pytest.raises(ValueError, match="JWT_EXPIRE_MINUTES"):
+            get_jwt_expire_minutes()
+
+
 def test_jwt_algorithm_validation():
     """Disallowed JWT_ALGORITHM values are rejected."""
     with patch.dict(os.environ, {"JWT_ALGORITHM": "none"}, clear=False):
@@ -175,11 +184,14 @@ def test_cors_origin_parser_valid_origins():
 def test_cors_origin_parser_invalid_origins():
     """Invalid CORS origin formats are rejected."""
     invalid_cases = [
+        "*",                              # Incompatible with credentialed CORS
         "https://",                       # Missing netloc
         "https://example.com/path",       # Path not allowed
         "https://user:pass@example.com",  # User credentials not allowed
         "https://example.com?query=1",    # Query string not allowed
         "https://example.com#fragment",   # Fragment not allowed
+        "https://example.com:invalid",     # Invalid port
+        "https://exa mple.com",            # Whitespace is invalid
         "ftp://example.com",              # Disallowed scheme
     ]
     for origin in invalid_cases:
@@ -192,6 +204,50 @@ def test_cors_origin_parser_production_https_requirement():
     with pytest.raises(ValueError) as exc_info:
         parse_and_validate_cors_origin("http://app.example.com", is_prod=True)
     assert "HTTPS" in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "webhook_url",
+    [
+        "https://",
+        "http://api.example.com/api/v1/telegram/webhook",
+        "https://user@example.com/api/v1/telegram/webhook",
+        "https://api.example.com:invalid/api/v1/telegram/webhook",
+        "https://api.example.com/wrong/path",
+        "https://api.example.com/api/v1/telegram/webhook?token=secret",
+    ],
+)
+def test_production_rejects_invalid_telegram_webhook_urls(webhook_url):
+    prod_env = {
+        "APP_ENV": "production",
+        "MONGO_URL": "mongodb://localhost:27017",
+        "DB_NAME": "citycare_clinic",
+        "JWT_SECRET": "xK9#mP2$vL5nR8qW1zT4yU7jH0cB3fS6",
+        "CORS_ALLOWED_ORIGINS": "https://clinic.example.com",
+        "SEED_DEMO_USERS": "false",
+        "TELEGRAM_PUBLIC_WEBHOOK_URL": webhook_url,
+        "TELEGRAM_WEBHOOK_SECRET": "valid_webhook_secret",
+    }
+    with patch.dict(os.environ, prod_env, clear=True):
+        with pytest.raises(ValueError, match="TELEGRAM_PUBLIC_WEBHOOK_URL"):
+            validate_config()
+
+
+@pytest.mark.parametrize("webhook_secret", ["contains spaces", "invalid/slash", "x" * 257])
+def test_production_rejects_invalid_telegram_webhook_secrets(webhook_secret):
+    prod_env = {
+        "APP_ENV": "production",
+        "MONGO_URL": "mongodb://localhost:27017",
+        "DB_NAME": "citycare_clinic",
+        "JWT_SECRET": "xK9#mP2$vL5nR8qW1zT4yU7jH0cB3fS6",
+        "CORS_ALLOWED_ORIGINS": "https://clinic.example.com",
+        "SEED_DEMO_USERS": "false",
+        "TELEGRAM_PUBLIC_WEBHOOK_URL": "https://api.example.com/api/v1/telegram/webhook",
+        "TELEGRAM_WEBHOOK_SECRET": webhook_secret,
+    }
+    with patch.dict(os.environ, prod_env, clear=True):
+        with pytest.raises(ValueError, match="TELEGRAM_WEBHOOK_SECRET"):
+            validate_config()
 
 
 @pytest.mark.asyncio
@@ -213,7 +269,7 @@ async def test_cors_middleware_options_response(async_client):
 @pytest.mark.asyncio
 async def test_database_connection_failure_does_not_log_credentials(caplog):
     """Database connection failure logs class name only and does not leak credentials."""
-    secret_sentinel = "mongodb+srv://admin_user:SuperSecretPassword123@cluster.mongodb.net"
+    secret_sentinel = "sensitive-connection-value-SuperSecretPassword123"
 
     mock_client_class = MagicMock()
     mock_client_instance = MagicMock()
