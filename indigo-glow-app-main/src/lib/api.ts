@@ -109,6 +109,12 @@ export type UserSignupResponse = {
   message: string;
 };
 
+export type TelegramLinkCode = {
+  code: string;
+  expires_in_seconds: number;
+  instructions: string;
+};
+
 export type Hospital = {
   hospital_id: string;
   name: string;
@@ -258,6 +264,10 @@ export const api = {
   /** POST /login */
   login: (input: { email: string; password: string }) =>
     request<TokenResponse>("/login", { method: "POST", body: input, auth: false }),
+
+  /** POST /telegram/link-code */
+  createTelegramLinkCode: () =>
+    request<TelegramLinkCode>("/telegram/link-code", { method: "POST" }),
 
   /** GET /doctor-info */
   getDoctorInfo: () => request<DoctorInfo>("/doctor-info", { auth: false }),

@@ -59,6 +59,9 @@ class UserModel(Model):
     role: UserRole = UserRole.PATIENT
     hospital_id: Optional[str] = None
     created_by: Optional[str] = Field(default=None)
+    phone_number: Optional[str] = Field(default=None)
+    telegram_user_id: Optional[str] = Field(default=None)
+    registration_source: str = Field(default="web")
     created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     model_config = {
@@ -76,5 +79,10 @@ class UserModel(Model):
         return (
             # Unique index on email — prevents duplicate registrations
             IndexModel([("email", ASCENDING)], unique=True, name="unique_email"),
+            IndexModel(
+                [("telegram_user_id", ASCENDING)],
+                unique=True,
+                name="unique_telegram_user_id",
+                partialFilterExpression={"telegram_user_id": {"$type": "string"}},
+            ),
         )
-

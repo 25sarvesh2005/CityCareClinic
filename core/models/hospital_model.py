@@ -24,7 +24,7 @@ Notes:
 """
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
 from odmantic import Field, Model
 from pymongo import ASCENDING, IndexModel
@@ -52,6 +52,8 @@ class HospitalModel(Model):
     address: str
     city: str
     contact_number: str
+    facilities: List[str] = Field(default=[])
+    services: List[str] = Field(default=[])
     owner_id: str
     is_active: bool = True
     is_approved: bool = False  # Requires SUPER_ADMIN approval before going live

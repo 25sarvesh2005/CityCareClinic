@@ -1,5 +1,9 @@
 # CityCare MCP Day 7
 
+## Telegram patient assistant
+
+The project now includes a patient-only Telegram gateway for symptom chat, hospital facilities, doctor discovery, specialization search, appointment booking, registration/account linking, appointments, and prescriptions. Existing web behavior remains unchanged. See [TELEGRAM_GATEWAY.md](TELEGRAM_GATEWAY.md) for architecture, security decisions, BotFather setup, webhook configuration, and local polling.
+
 CityCare exposes its existing appointment API through an MCP server in `mcp_server/server.py`. The server reuses the API as the source of truth: it does not recreate appointment dates, capacity rules, duplicate-booking checks, or patient identity in MCP.
 
 ## What the server exposes

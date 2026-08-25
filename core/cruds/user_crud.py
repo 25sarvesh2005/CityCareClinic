@@ -80,6 +80,23 @@ async def find_user_by_email(engine: AIOEngine, email: str) -> Optional[UserMode
     return user
 
 
+async def find_user_by_telegram_id(
+    engine: AIOEngine, telegram_user_id: str
+) -> Optional[UserModel]:
+    """Return the patient account linked to one Telegram identity."""
+    return await engine.find_one(
+        UserModel, UserModel.telegram_user_id == telegram_user_id
+    )
+
+
+async def link_user_to_telegram(
+    engine: AIOEngine, user: UserModel, telegram_user_id: str
+) -> UserModel:
+    """Persist a verified one-to-one Telegram identity link."""
+    user.telegram_user_id = telegram_user_id
+    return await engine.save(user)
+
+
 async def count_all_patients(engine: AIOEngine) -> int:
     """
     Count the total number of patient accounts in the users collection.
