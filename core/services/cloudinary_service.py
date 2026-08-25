@@ -19,11 +19,20 @@ from common.logger import get_logger
 
 logger = get_logger(__name__)
 
-LOCAL_PRESCRIPTION_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "data",
-    "prescriptions",
-)
+def get_local_prescription_dir() -> str:
+    override = os.getenv("LOCAL_PRESCRIPTION_DIR")
+    if override:
+        return override
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "data",
+        "prescriptions",
+    )
+
+
+LOCAL_PRESCRIPTION_DIR = get_local_prescription_dir()
+
+
 
 
 def is_cloudinary_configured() -> bool:
@@ -77,9 +86,10 @@ async def upload_prescription_pdf(
         except Exception as err:
             logger.warning("Cloudinary upload failed for prescription %s: %s. Falling back to local storage.", prescription_id, str(err))
 
-    # ── Fallback Local Disk Storage ──
-    os.makedirs(LOCAL_PRESCRIPTION_DIR, exist_ok=True)
-    local_path = os.path.join(LOCAL_PRESCRIPTION_DIR, f"{prescription_id}.pdf")
+    # ── Local Disk Storage Fallback ──
+    local_dir = get_local_prescription_dir()
+    os.makedirs(local_dir, exist_ok=True)
+    local_path = os.path.join(local_dir, f"{prescription_id}.pdf")
     with open(local_path, "wb") as f:
         f.write(pdf_bytes)
 

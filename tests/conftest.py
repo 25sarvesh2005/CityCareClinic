@@ -3,10 +3,22 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+import tempfile
+
+_test_tmp_dir = os.path.join(tempfile.gettempdir(), "citycare_test_data")
+
 # Set test env variables before importing app
+os.environ["APP_ENV"] = "test"
+os.environ["SEED_DEMO_USERS"] = "true"
+os.environ["DEMO_DOCTOR_PASSWORD"] = "doctor123"
+os.environ["DEMO_PATIENT_PASSWORD"] = "patient123"
+os.environ["DEMO_ADMIN_PASSWORD"] = "admin123"
+os.environ["MONGO_URL"] = "mongodb://localhost:27017"
 os.environ["DB_NAME"] = "citycare_clinic_test_db"
 os.environ["JWT_SECRET"] = "test-secret-key-for-unit-testing"
 os.environ["DOCTOR_EMAIL"] = "dr.meera@citycare.com"
+os.environ["LOCAL_PRESCRIPTION_DIR"] = os.path.join(_test_tmp_dir, "prescriptions")
+os.environ["CHROMA_PERSIST_DIR"] = os.path.join(_test_tmp_dir, "chroma_db")
 
 from main import app
 from core.database.database import connect_to_database, close_database_connection, get_engine
@@ -16,6 +28,12 @@ from core.models.appointment_model import AppointmentModel
 from core.models.hospital_model import HospitalModel
 from core.models.doctor_profile_model import DoctorProfileModel
 from core.models.prescription_model import PrescriptionModel
+from telegram_bot.models import (
+    TelegramSessionModel,
+    TelegramMessageModel,
+    TelegramLinkCodeModel,
+    TelegramUpdateModel,
+)
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -23,15 +41,31 @@ async def setup_db():
     """
     Initialize test database connection per test function.
 
-    Cleans all collections (users, appointments, hospitals, doctor_profiles, prescriptions)
-    before and after each test so tests are fully isolated. Seeds the default
+    Cleans all collections (users, appointments, hospitals, doctor_profiles, prescriptions,
+    telegram models) before and after each test so tests are fully isolated. Seeds the default
     doctor and patient accounts after cleanup.
     """
+    os.environ["DEMO_DOCTOR_PASSWORD"] = "doctor123"
+    os.environ["DEMO_PATIENT_PASSWORD"] = "patient123"
+    os.environ["DEMO_ADMIN_PASSWORD"] = "admin123"
+
     await connect_to_database()
     engine = get_engine()
 
+    models = (
+        UserModel,
+        AppointmentModel,
+        HospitalModel,
+        DoctorProfileModel,
+        PrescriptionModel,
+        TelegramSessionModel,
+        TelegramMessageModel,
+        TelegramLinkCodeModel,
+        TelegramUpdateModel,
+    )
+
     # Clean all collections before each test run
-    for model in (UserModel, AppointmentModel, HospitalModel, DoctorProfileModel, PrescriptionModel):
+    for model in models:
         try:
             await engine.remove(model)
         except Exception:
@@ -43,12 +77,13 @@ async def setup_db():
     yield engine
 
     # Clean up and close connection after test
-    for model in (UserModel, AppointmentModel, HospitalModel, DoctorProfileModel, PrescriptionModel):
+    for model in models:
         try:
             await engine.remove(model)
         except Exception:
             pass
     await close_database_connection()
+
 
 
 @pytest_asyncio.fixture

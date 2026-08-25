@@ -30,20 +30,21 @@ ReDoc:
 ─────────────────────────────────────────────────────────────────────────────
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 
-from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
+from common.config import get_cors_origins, load_project_env, validate_config
 from common.logger import get_logger
 from core.apis.api import api_router
-from core.database.database import close_database_connection, connect_to_database
+from core.database.database import close_database_connection, connect_to_database, get_engine
 from core.database.seed import seed_initial_users
 
 # ─── Load Environment Variables ───────────────────────────────────────────────
 
-load_dotenv()
+load_project_env()
 
 # ─── Logger ───────────────────────────────────────────────────────────────────
 
@@ -58,14 +59,15 @@ async def lifespan(application: FastAPI):
     """
     Manage startup and shutdown events for the FastAPI application.
 
-    On startup  : Establishes the MongoDB connection, initializes
-                  the ODMantic Engine singleton, and seeds default user accounts.
+    On startup  : Validates production configuration, establishes MongoDB connection,
+                  and optionally seeds default accounts if explicitly enabled.
     On shutdown : Gracefully closes the Motor client connection.
 
     Args:
         application (FastAPI): The FastAPI application instance.
     """
     logger.info("CityCare Clinic API starting up...")
+    validate_config()
     await connect_to_database()
     await seed_initial_users()
     logger.info("CityCare Clinic API is ready to accept requests.")
@@ -112,17 +114,17 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict to specific origins in production
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # ─── API Router ───────────────────────────────────────────────────────────────
 
 app.include_router(api_router)
 
-# ─── Health Check ─────────────────────────────────────────────────────────────
+# ─── Health & Probes ──────────────────────────────────────────────────────────
 
 
 @app.get("/", tags=["Health"], summary="Health check", include_in_schema=True)
@@ -139,3 +141,35 @@ async def health_check() -> dict:
         "version": "1.0.0",
         "docs": "/docs",
     }
+
+
+@app.get("/health/liveness", tags=["Health"], summary="Liveness probe", include_in_schema=True)
+async def liveness_probe() -> dict:
+    """
+    Lightweight liveness probe that returns HTTP 200 without checking external services.
+    """
+    return {"status": "alive"}
+
+
+@app.get("/health/readiness", tags=["Health"], summary="Readiness probe", include_in_schema=True)
+async def readiness_probe() -> dict:
+    """
+    Readiness probe verifying MongoDB client/engine and performing a bounded database ping.
+    Returns HTTP 503 if the database is unavailable.
+    """
+    try:
+        engine = get_engine()
+        if engine is None or engine.client is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"status": "not_ready", "database": "disconnected"},
+            )
+        await asyncio.wait_for(engine.client.admin.command("ping"), timeout=2.0)
+        return {"status": "ready", "database": "connected"}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"status": "not_ready", "database": "disconnected"},
+        )
