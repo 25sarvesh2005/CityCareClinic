@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import re
 import weakref
 from datetime import datetime, timezone
@@ -11,8 +12,8 @@ from typing import Dict, List, Optional
 from bson import ObjectId
 from fastapi import HTTPException
 from odmantic import AIOEngine
+from odmantic.exceptions import DuplicateKeyError as ODManticDuplicateKeyError
 from pydantic import EmailStr, TypeAdapter, ValidationError
-from pymongo.errors import DuplicateKeyError
 
 from core.apis.schemas.appointment_schema import BookAppointmentRequest
 from core.constants import Symptom, UserRole
@@ -24,22 +25,23 @@ from core.models.doctor_profile_model import DoctorProfileModel
 from core.models.user_model import UserModel
 from telegram_bot.cruds import (
     add_message,
+    claim_update,
     clear_messages,
-    find_update,
     get_or_create_session,
     mark_update_delivered,
     recent_messages,
     save_session,
-    save_update,
+    store_update_replies,
 )
 from telegram_bot.medical_assistant import answer_medical_message
-from telegram_bot.models import TelegramSessionModel
+from telegram_bot.models import TelegramSessionModel, TelegramUpdateModel
 from telegram_bot.patient_service import TelegramPatientService
 from telegram_bot.schemas import TelegramDispatch, TelegramReply
 
 
 EMAIL_ADAPTER = TypeAdapter(EmailStr)
 PHONE_PATTERN = re.compile(r"^\+?[0-9][0-9 -]{6,18}[0-9]$")
+LOGGER = logging.getLogger(__name__)
 
 
 def hash_link_code(code: str) -> str:
@@ -71,24 +73,16 @@ class TelegramGateway:
         update_id = int(update.get("update_id", -1))
         if update_id < 0:
             raise HTTPException(status_code=400, detail="Telegram update_id is required.")
-        existing = await find_update(self.engine, update_id)
         callback_query_id = (update.get("callback_query") or {}).get("id")
-        if existing:
-            replies = [] if existing.delivered else [
-                TelegramReply.model_validate(item)
-                for item in json.loads(existing.replies_json)
-            ]
-            return TelegramDispatch(
-                update_id=update_id,
-                replies=replies,
-                replayed=True,
-                callback_query_id=callback_query_id,
-            )
-
         normalized = self._normalize(update)
+        chat_id = normalized[1] if normalized else "unknown"
+        claimed, ledger = await claim_update(self.engine, update_id, chat_id)
+        if not claimed:
+            return self._replay_dispatch(ledger, callback_query_id)
+
         if not normalized:
             dispatch = TelegramDispatch(update_id=update_id)
-            await save_update(self.engine, update_id, "unknown", "[]")
+            await store_update_replies(self.engine, update_id, "unknown", "[]")
             return dispatch
 
         user_id, chat_id, chat_type, username, text = normalized
@@ -99,7 +93,7 @@ class TelegramGateway:
                     text="For privacy, the Medihub patient assistant works only in a private chat. Please message the bot directly.",
                 )
             ]
-            await save_update(
+            await store_update_replies(
                 self.engine,
                 update_id,
                 chat_id,
@@ -112,19 +106,6 @@ class TelegramGateway:
             )
         lock = self._locks.setdefault(user_id, asyncio.Lock())
         async with lock:
-            existing = await find_update(self.engine, update_id)
-            if existing:
-                replies = [] if existing.delivered else [
-                    TelegramReply.model_validate(item)
-                    for item in json.loads(existing.replies_json)
-                ]
-                return TelegramDispatch(
-                    update_id=update_id,
-                    replies=replies,
-                    replayed=True,
-                    callback_query_id=callback_query_id,
-                )
-
             session = await get_or_create_session(
                 self.engine, user_id, chat_id, username
             )
@@ -139,24 +120,44 @@ class TelegramGateway:
                 replies = [TelegramReply(chat_id=chat_id, text=str(error.detail))]
             except (ValidationError, ValueError) as error:
                 replies = [TelegramReply(chat_id=chat_id, text=str(error))]
+            except Exception:
+                LOGGER.exception("Telegram update %s failed during processing", update_id)
+                replies = [
+                    TelegramReply(
+                        chat_id=chat_id,
+                        text="Something went wrong while processing that request. Please try again with a new message.",
+                    )
+                ]
 
             replies_json = json.dumps(
                 [reply.model_dump(exclude_none=True) for reply in replies]
             )
-            try:
-                await save_update(self.engine, update_id, chat_id, replies_json)
-            except DuplicateKeyError:
-                recorded = await find_update(self.engine, update_id)
-                if recorded:
-                    replies = [] if recorded.delivered else [
-                        TelegramReply.model_validate(item)
-                        for item in json.loads(recorded.replies_json)
-                    ]
+            await store_update_replies(self.engine, update_id, chat_id, replies_json)
             return TelegramDispatch(
                 update_id=update_id,
                 replies=replies,
                 callback_query_id=callback_query_id,
             )
+
+    @staticmethod
+    def _replay_dispatch(
+        recorded: TelegramUpdateModel, callback_query_id: Optional[str]
+    ) -> TelegramDispatch:
+        """Recreate a safe dispatch from a durable claim or completed ledger row."""
+        in_progress = recorded.status == "processing" and not recorded.delivered
+        replies = []
+        if not recorded.delivered and not in_progress:
+            replies = [
+                TelegramReply.model_validate(item)
+                for item in json.loads(recorded.replies_json)
+            ]
+        return TelegramDispatch(
+            update_id=recorded.update_id,
+            replies=replies,
+            replayed=True,
+            in_progress=in_progress,
+            callback_query_id=callback_query_id,
+        )
 
     async def mark_delivered(self, update_id: int) -> None:
         """Mark all replies for one update as accepted by Telegram."""
@@ -309,7 +310,9 @@ class TelegramGateway:
                 "/hospitals — hospital list\n/doctors — available doctors\n"
                 "/speciality — find a specialist\n/book — book an appointment\n"
                 "/facilities — hospital services\n/appointments — your appointments\n"
-                "/prescriptions — your prescriptions\n/reset — reset this conversation"
+                "/prescriptions — your prescriptions\n/reset — reset this conversation\n\n"
+                "This assistant provides general guidance, not a diagnosis. "
+                "For an emergency, call local emergency services now."
             ),
             reply_markup=inline_keyboard([
                 [("🏥 Hospitals", "menu:hospitals"), ("👨‍⚕️ Doctors", "menu:doctors")]
@@ -416,9 +419,9 @@ class TelegramGateway:
             temperature=session.booking_temperature,
             symptoms=session.booking_symptoms,
         )
+        appointment = await self.service.book(patient, request)
         self._clear_workflow(session)
         await save_session(self.engine, session)
-        appointment = await self.service.book(patient, request)
         return [TelegramReply(chat_id=chat_id, text=f"✅ Appointment booked for {appointment.date} at {appointment.slot}.\nStatus: {appointment.status}\nAppointment ID: {appointment.appointment_id}")]
 
     async def _appointments(self, session: TelegramSessionModel, chat_id: str) -> List[TelegramReply]:
@@ -464,7 +467,15 @@ class TelegramGateway:
         existing = await find_user_by_telegram_id(self.engine, session.telegram_user_id)
         if existing and str(existing.id) != str(patient.id):
             return [TelegramReply(chat_id=chat_id, text="This Telegram user is already linked to another patient account.")]
-        await link_user_to_telegram(self.engine, patient, session.telegram_user_id)
+        try:
+            await link_user_to_telegram(self.engine, patient, session.telegram_user_id)
+        except ODManticDuplicateKeyError:
+            return [
+                TelegramReply(
+                    chat_id=chat_id,
+                    text="That patient account or Telegram identity was linked by another request. Generate a new code and check the linked account.",
+                )
+            ]
         session.patient_id = str(patient.id)
         session.state = "idle"
         await save_session(self.engine, session)

@@ -50,17 +50,43 @@ Telegram bot chats are not end-to-end encrypted. The bot therefore never asks fo
 
 ## BotFather and environment setup
 
-1. Create a bot with `@BotFather` and keep its token secret.
-2. Copy `.env.example` to `.env` and configure:
+1. In Telegram, open the verified `@BotFather`, send `/newbot`, choose a display
+   name, and choose a unique username ending in `bot`. Keep the returned token secret.
+2. Install dependencies and ensure MongoDB is running:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+3. Copy `.env.example` to `.env`. Generate a webhook secret containing only
+   Telegram's permitted characters:
+
+```powershell
+[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+```
+
+4. Configure the three required values. The public URL must include the app's
+   `/api` prefix and must be reachable over HTTPS:
 
 ```dotenv
 TELEGRAM_BOT_TOKEN=<BotFather token>
-TELEGRAM_WEBHOOK_SECRET=<long random secret>
+TELEGRAM_WEBHOOK_SECRET=<generated hex secret>
 TELEGRAM_PUBLIC_WEBHOOK_URL=https://your-api.example.com/api/v1/telegram/webhook
 ```
 
-3. Run the FastAPI service behind HTTPS.
-4. Configure Telegram and the command menu:
+`GEMINI_API_KEY` is optional. Without it, deterministic medical safety guidance
+and all hospital operations still work.
+
+5. Start the API and check gateway configuration without exposing credentials:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+Open `http://127.0.0.1:8000/api/v1/telegram/status` and confirm both configuration
+flags are `true`. Production must put this service behind a valid HTTPS endpoint.
+
+6. Register the webhook and command menu, then inspect Telegram's result:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\configure_telegram_webhook.py set
@@ -68,12 +94,31 @@ TELEGRAM_PUBLIC_WEBHOOK_URL=https://your-api.example.com/api/v1/telegram/webhook
 ```
 
 Telegram sends the webhook secret in `X-Telegram-Bot-Api-Secret-Token`; the API rejects missing or incorrect secrets before processing the update.
+The setup script uses one Telegram webhook connection so multi-step patient
+workflows remain ordered. Do not increase it until a distributed per-patient
+lock is implemented.
+
+7. Open `https://t.me/<your_bot_username>`, press **Start**, and test:
+
+```text
+/start
+/hospitals
+/doctors
+/speciality cardiology
+/register
+```
+
+To link an existing web patient, authenticate as that patient, call
+`POST /api/v1/telegram/link-code`, and send the returned `/link CODE` to the bot.
+Then test `/appointments` and `/prescriptions`.
 
 ## Local development with long polling
 
-Do not configure a webhook and polling simultaneously. For a local, always-on process:
+Do not configure a webhook and polling simultaneously. Telegram disables
+`getUpdates` while a webhook exists. Delete the webhook first, then run:
 
 ```powershell
+.\.venv\Scripts\python.exe scripts\configure_telegram_webhook.py delete
 .\.venv\Scripts\python.exe -m telegram_bot.polling
 ```
 
@@ -102,8 +147,10 @@ Example admin payload:
 
 - Use a dedicated bot token per environment and rotate it after any exposure.
 - Keep the webhook behind HTTPS and retain secret-header verification.
-- Run one polling process or one webhook consumer group, never both.
+- Run exactly one polling process, or keep the configured webhook at one
+  connection; never run polling and a webhook together.
 - Telegram short-term transcripts expire after 30 days and delivery-ledger rows after 7 days; confirm those defaults against your retention policy and configure MongoDB backups accordingly.
-- Add distributed per-user locking if the API runs multiple workers; the current lock is process-local while booking database constraints remain authoritative.
+- Add distributed per-user locking before increasing webhook concurrency; update
+  IDs and one-time link codes are already claimed atomically in MongoDB.
 - Obtain patient consent and complete the applicable healthcare/privacy review before sending medical records through Telegram.
 - Monitor gateway delivery failures without logging bot tokens, link codes, symptoms, or prescription content.

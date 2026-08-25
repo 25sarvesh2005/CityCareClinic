@@ -4,6 +4,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 # Set test env variables before importing app
+os.environ["MONGO_URL"] = "mongodb://localhost:27017"
 os.environ["DB_NAME"] = "citycare_clinic_test_db"
 os.environ["JWT_SECRET"] = "test-secret-key-for-unit-testing"
 os.environ["DOCTOR_EMAIL"] = "dr.meera@citycare.com"

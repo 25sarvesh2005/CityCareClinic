@@ -2,13 +2,19 @@
 
 import asyncio
 import os
+from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
 
 from core.database.database import close_database_connection, connect_to_database, get_engine
 from telegram_bot.client import TelegramClient
 from telegram_bot.cruds import mark_update_attempt
 from telegram_bot.gateway import TelegramGateway
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 async def run() -> None:
@@ -32,6 +38,9 @@ async def run() -> None:
                 response.raise_for_status()
                 for update in response.json().get("result", []):
                     dispatch = await gateway.handle_update(update)
+                    if dispatch.in_progress:
+                        # Do not advance while another worker owns this update.
+                        break
                     try:
                         await client.answer_callback(dispatch.callback_query_id)
                         for reply in dispatch.replies:

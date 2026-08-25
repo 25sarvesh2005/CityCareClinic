@@ -1,9 +1,11 @@
 """MongoDB operations for Telegram gateway state and delivery persistence."""
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from odmantic import AIOEngine
+from pymongo.errors import DuplicateKeyError
 
 from telegram_bot.models import (
     TelegramLinkCodeModel,
@@ -12,6 +14,14 @@ from telegram_bot.models import (
     TelegramUpdateModel,
     utc_now,
 )
+
+
+@dataclass(frozen=True)
+class ConsumedLinkCode:
+    """The minimum trusted payload returned by an atomic link-code consume."""
+
+    patient_id: str
+    expires_at: datetime
 
 
 async def get_or_create_session(
@@ -94,15 +104,16 @@ async def create_link_code(
 
 async def consume_link_code(
     engine: AIOEngine, code_hash: str
-) -> Optional[TelegramLinkCodeModel]:
-    """Atomically-enough consume a single-use code for the gateway workflow."""
-    code = await engine.find_one(
-        TelegramLinkCodeModel, TelegramLinkCodeModel.code_hash == code_hash
-    )
-    if not code:
+) -> Optional[ConsumedLinkCode]:
+    """Atomically consume a code so concurrent Telegram users cannot reuse it."""
+    collection = engine.get_collection(TelegramLinkCodeModel)
+    document = await collection.find_one_and_delete({"code_hash": code_hash})
+    if not document:
         return None
-    await engine.delete(code)
-    return code
+    return ConsumedLinkCode(
+        patient_id=str(document["patient_id"]),
+        expires_at=document["expires_at"],
+    )
 
 
 async def find_update(engine: AIOEngine, update_id: int) -> Optional[TelegramUpdateModel]:
@@ -112,25 +123,55 @@ async def find_update(engine: AIOEngine, update_id: int) -> Optional[TelegramUpd
     )
 
 
+async def claim_update(
+    engine: AIOEngine, update_id: int, chat_id: str
+) -> Tuple[bool, TelegramUpdateModel]:
+    """Claim an update before side effects using its unique Telegram update ID."""
+    claim = TelegramUpdateModel(
+        update_id=update_id,
+        chat_id=chat_id,
+        status="processing",
+    )
+    collection = engine.get_collection(TelegramUpdateModel)
+    try:
+        await collection.insert_one(claim.model_dump_doc())
+        return True, claim
+    except DuplicateKeyError:
+        existing = await find_update(engine, update_id)
+        if existing is None:
+            raise
+        return False, existing
+
+
+async def store_update_replies(
+    engine: AIOEngine, update_id: int, chat_id: str, replies_json: str
+) -> TelegramUpdateModel:
+    """Finish processing a claimed update and make its replies deliverable."""
+    update = await find_update(engine, update_id)
+    if update is None:
+        raise RuntimeError(f"Telegram update {update_id} was not claimed.")
+    update.chat_id = chat_id
+    update.replies_json = replies_json
+    update.status = "pending"
+    update.updated_at = utc_now()
+    return await engine.save(update)
+
+
 async def save_update(
     engine: AIOEngine, update_id: int, chat_id: str, replies_json: str
 ) -> TelegramUpdateModel:
-    """Persist replies before delivery so Telegram retries do not rerun effects."""
-    return await engine.save(
-        TelegramUpdateModel(
-            update_id=update_id,
-            chat_id=chat_id,
-            replies_json=replies_json,
-        )
-    )
+    """Persist replies for compatibility with callers that already own a claim."""
+    return await store_update_replies(engine, update_id, chat_id, replies_json)
 
 
 async def mark_update_delivered(engine: AIOEngine, update_id: int) -> None:
     """Complete one delivery-ledger record after all replies are accepted."""
     update = await find_update(engine, update_id)
     if update:
+        update.status = "delivered"
         update.delivered = True
         update.attempts += 1
+        update.updated_at = utc_now()
         await engine.save(update)
 
 
@@ -139,5 +180,5 @@ async def mark_update_attempt(engine: AIOEngine, update_id: int) -> None:
     update = await find_update(engine, update_id)
     if update:
         update.attempts += 1
+        update.updated_at = utc_now()
         await engine.save(update)
-

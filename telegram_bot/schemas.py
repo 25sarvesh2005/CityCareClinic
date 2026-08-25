@@ -19,6 +19,7 @@ class TelegramDispatch(BaseModel):
     update_id: int
     replies: List[TelegramReply] = Field(default_factory=list)
     replayed: bool = False
+    in_progress: bool = False
     callback_query_id: Optional[str] = None
 
 

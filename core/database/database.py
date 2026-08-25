@@ -78,7 +78,8 @@ async def connect_to_database() -> None:
     mongo_url: str = os.getenv("MONGO_URL", "mongodb://localhost:27017")
     database_name: str = os.getenv("DB_NAME", "citycare_clinic")
 
-    logger.info("Connecting to MongoDB at: %s / %s", mongo_url, database_name)
+    # Never log MONGO_URL: Atlas URIs commonly contain database credentials.
+    logger.info("Connecting to MongoDB database: %s", database_name)
 
     _motor_client = AsyncIOMotorClient(mongo_url)
     _odmantic_engine = AIOEngine(client=_motor_client, database=database_name)

@@ -85,6 +85,11 @@ async def telegram_webhook(
     _verify_webhook_secret(telegram_secret)
     gateway = TelegramGateway(get_engine())
     dispatch = await gateway.handle_update(update)
+    if dispatch.in_progress:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Telegram update is already being processed; retry shortly.",
+        )
     if not dispatch.replies:
         await gateway.mark_delivered(dispatch.update_id)
         return TelegramWebhookResponse(ok=True, duplicate=dispatch.replayed)
@@ -102,4 +107,3 @@ async def telegram_webhook(
             detail="Telegram delivery failed; Telegram may retry this update.",
         )
     return TelegramWebhookResponse(ok=True, duplicate=dispatch.replayed)
-

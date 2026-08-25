@@ -7,7 +7,7 @@ from typing import List, Optional
 from bson import ObjectId
 from fastapi import HTTPException, status
 from odmantic import AIOEngine
-from pymongo.errors import DuplicateKeyError
+from odmantic.exceptions import DuplicateKeyError
 
 from common.auth import hash_password
 from core.apis.schemas.appointment_schema import BookAppointmentRequest

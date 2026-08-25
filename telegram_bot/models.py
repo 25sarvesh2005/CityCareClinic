@@ -93,10 +93,12 @@ class TelegramUpdateModel(Model):
 
     update_id: int
     chat_id: str
-    replies_json: str
+    replies_json: str = "[]"
+    status: str = "pending"
     delivered: bool = False
     attempts: int = 0
     created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
     model_config = {"collection": "telegram_updates"}
 

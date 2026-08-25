@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import sys
 
 import httpx
@@ -11,6 +12,7 @@ from dotenv import load_dotenv
 
 COMMANDS = [
     {"command": "start", "description": "Open the patient assistant"},
+    {"command": "help", "description": "Show commands and safety guidance"},
     {"command": "register", "description": "Register a new patient"},
     {"command": "link", "description": "Link an existing patient account"},
     {"command": "hospitals", "description": "List available hospitals"},
@@ -22,6 +24,7 @@ COMMANDS = [
     {"command": "prescriptions", "description": "View your prescriptions"},
     {"command": "reset", "description": "Reset the current conversation"},
 ]
+SECRET_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,256}$")
 
 
 def main() -> int:
@@ -41,8 +44,14 @@ def main() -> int:
 
     with httpx.Client(timeout=30) as client:
         if args.action == "set":
-            if not args.url.startswith("https://") or not secret:
-                print("An HTTPS --url and TELEGRAM_WEBHOOK_SECRET are required.", file=sys.stderr)
+            if not args.url.startswith("https://"):
+                print("An HTTPS --url is required.", file=sys.stderr)
+                return 2
+            if not SECRET_PATTERN.fullmatch(secret):
+                print(
+                    "TELEGRAM_WEBHOOK_SECRET must be 1-256 characters using only letters, numbers, _ or -.",
+                    file=sys.stderr,
+                )
                 return 2
             response = client.post(
                 f"{api}/setWebhook",
@@ -51,6 +60,9 @@ def main() -> int:
                     "secret_token": secret,
                     "allowed_updates": ["message", "callback_query"],
                     "drop_pending_updates": False,
+                    # One connection preserves workflow order with the current
+                    # process-local per-patient session lock.
+                    "max_connections": 1,
                 },
             )
             response.raise_for_status()
@@ -74,4 +86,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

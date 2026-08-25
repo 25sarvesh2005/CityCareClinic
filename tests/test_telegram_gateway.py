@@ -1,5 +1,6 @@
 """End-to-end tests for the patient-only Telegram gateway."""
 
+import asyncio
 from datetime import date
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from core.models.appointment_model import AppointmentModel
 from core.models.hospital_model import HospitalModel
 from core.models.user_model import UserModel
+from telegram_bot.client import TelegramClient
 from telegram_bot.gateway import TelegramGateway
 
 
@@ -116,6 +118,40 @@ async def test_existing_patient_links_with_one_time_code(
     assert "invalid or expired" in replay.replies[0].text
 
 
+async def test_link_code_is_atomic_under_concurrent_consumers(
+    setup_db, async_client
+):
+    signup = await async_client.post(
+        "/api/v1/signup",
+        json={
+            "name": "Concurrent Link Patient",
+            "email": "concurrent.telegram@example.com",
+            "password": "safe-password",
+        },
+    )
+    assert signup.status_code == 201
+    login = await async_client.post(
+        "/api/v1/login",
+        json={
+            "email": "concurrent.telegram@example.com",
+            "password": "safe-password",
+        },
+    )
+    code_response = await async_client.post(
+        "/api/v1/telegram/link-code",
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+    )
+    code = code_response.json()["code"]
+
+    results = await asyncio.gather(
+        dispatch(setup_db, message(210, 700020, f"/link {code}")),
+        dispatch(setup_db, message(211, 700021, f"/link {code}")),
+    )
+    texts = [result.replies[0].text for result in results]
+    assert sum("Linked securely" in text for text in texts) == 1
+    assert sum("invalid or expired" in text for text in texts) == 1
+
+
 async def test_doctor_specialization_and_facilities_are_patient_visible(
     setup_db, booking_context
 ):
@@ -187,6 +223,31 @@ async def test_registered_patient_books_only_after_explicit_confirmation(
     ) == 1
 
 
+async def test_concurrent_duplicate_update_runs_booking_effect_once(
+    setup_db, booking_context
+):
+    user_id = 700022
+    patient = await register_patient(setup_db, user_id, 900)
+    hospital_id = booking_context["hospital_id"]
+    doctor_id = booking_context["doctor_id"]
+
+    await dispatch(setup_db, callback(910, user_id, f"book:{hospital_id}:{doctor_id}"))
+    await dispatch(setup_db, message(911, user_id, date.today().isoformat()))
+    await dispatch(setup_db, callback(912, user_id, "slot:10:00"))
+    await dispatch(setup_db, message(913, user_id, "Persistent fever and body pain"))
+    await dispatch(setup_db, message(914, user_id, "99.5"))
+    await dispatch(setup_db, message(915, user_id, "fever, bodyache"))
+
+    results = await asyncio.gather(
+        dispatch(setup_db, callback(916, user_id, "confirm_booking")),
+        dispatch(setup_db, callback(916, user_id, "confirm_booking")),
+    )
+    assert any(result.replayed for result in results)
+    assert await setup_db.count(
+        AppointmentModel, AppointmentModel.patient_id == str(patient.id)
+    ) == 1
+
+
 async def test_private_records_require_registration(setup_db):
     appointments = await dispatch(
         setup_db, message(500, 700006, "/appointments")
@@ -215,6 +276,31 @@ async def test_webhook_rejects_invalid_secret(async_client, monkeypatch):
         headers={"X-Telegram-Bot-Api-Secret-Token": "wrong-secret"},
     )
     assert response.status_code == 401
+
+
+async def test_valid_webhook_delivers_gateway_reply(async_client, monkeypatch):
+    sent = []
+
+    async def fake_send(_client, reply):
+        sent.append(reply)
+
+    async def fake_answer_callback(_client, _callback_query_id):
+        return None
+
+    monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "correct-secret")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token")
+    monkeypatch.setattr(TelegramClient, "send", fake_send)
+    monkeypatch.setattr(TelegramClient, "answer_callback", fake_answer_callback)
+
+    response = await async_client.post(
+        "/api/v1/telegram/webhook",
+        json=message(701, 700008, "/start"),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "correct-secret"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "duplicate": False}
+    assert len(sent) == 1
+    assert "Medihub Patient Assistant" in sent[0].text
 
 
 async def test_group_chat_is_rejected_to_protect_patient_privacy(setup_db):

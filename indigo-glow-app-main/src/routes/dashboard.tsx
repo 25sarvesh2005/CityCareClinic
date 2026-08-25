@@ -11,6 +11,10 @@ import {
   Search,
   ChevronRight,
   AlertTriangle,
+  Check,
+  Copy,
+  MessageCircle,
+  ShieldCheck,
   Stethoscope,
   Sparkles,
   type LucideIcon,
@@ -19,7 +23,14 @@ import { AppShell } from "@/components/AppShell";
 import { RoleGuard } from "@/components/RoleGuard";
 import { Badge, Button, ConfirmDialog, GlassCard, Skeleton } from "@/components/ui-kit";
 import { useToast } from "@/components/Toaster";
-import { api, ApiError, SYMPTOM_LABELS, type Appointment, type Hospital } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  SYMPTOM_LABELS,
+  type Appointment,
+  type Hospital,
+  type TelegramLinkCode,
+} from "@/lib/api";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -95,6 +106,8 @@ function PatientDashboard() {
   const [loadingHospitals, setLoadingHospitals] = useState(true);
   const [cityFilter, setCityFilter] = useState("");
   const [pendingCancel, setPendingCancel] = useState<Appointment | null>(null);
+  const [telegramLink, setTelegramLink] = useState<TelegramLinkCode | null>(null);
+  const [telegramCommandCopied, setTelegramCommandCopied] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -131,6 +144,28 @@ function PatientDashboard() {
     },
     onError: (err) => toast.error("Couldn't cancel appointment", (err as ApiError).message),
   });
+
+  const createTelegramLink = useMutation({
+    mutationFn: api.createTelegramLinkCode,
+    onSuccess: (result) => {
+      setTelegramLink(result);
+      setTelegramCommandCopied(false);
+      toast.success("Telegram link code created", "It expires in 10 minutes and works once.");
+    },
+    onError: (err) =>
+      toast.error("Couldn't create Telegram link", (err as ApiError).message),
+  });
+
+  async function copyTelegramCommand() {
+    if (!telegramLink) return;
+    try {
+      await navigator.clipboard.writeText(`/link ${telegramLink.code}`);
+      setTelegramCommandCopied(true);
+      toast.success("Telegram command copied");
+    } catch {
+      toast.error("Copy failed", "Select the command and copy it manually.");
+    }
+  }
 
   const appointments = apptQuery.data ?? [];
   const prescriptions = prescriptionsQuery.data ?? [];
@@ -322,6 +357,78 @@ function PatientDashboard() {
 
           {/* Right Column: My Prescriptions & Fast Clinic Discovery */}
           <div className="space-y-6">
+            {/* Telegram Patient Assistant */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+                  <MessageCircle className="size-5 text-cyan" /> Telegram assistant
+                </h2>
+                <Badge tone="cyan">Patient access</Badge>
+              </div>
+
+              <GlassCard className="space-y-4 border-cyan/20 bg-gradient-to-br from-cyan/5 to-indigo/5">
+                <div className="flex items-start gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-cyan/20 bg-cyan/10 text-cyan">
+                    <ShieldCheck className="size-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground">Connect this patient account</h3>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      Generate a single-use code, then send the resulting command in a private chat
+                      with the CityCare Telegram bot. Never send your web password to the bot.
+                    </p>
+                  </div>
+                </div>
+
+                {telegramLink ? (
+                  <div className="space-y-3 rounded-xl border border-cyan/20 bg-background/70 p-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Send this command to the bot
+                      </p>
+                      <code className="mt-2 block select-all break-all rounded-lg border border-glass-border bg-muted/50 px-3 py-2 text-xs font-semibold text-foreground">
+                        /link {telegramLink.code}
+                      </code>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11px] text-muted-foreground">
+                        Expires in {Math.round(telegramLink.expires_in_seconds / 60)} minutes · works once
+                      </p>
+                      <Button variant="outline" size="sm" onClick={copyTelegramCommand}>
+                        {telegramCommandCopied ? (
+                          <Check className="size-3.5 text-success" />
+                        ) : (
+                          <Copy className="size-3.5" />
+                        )}
+                        {telegramCommandCopied ? "Copied" : "Copy command"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    variant="cyan"
+                    size="sm"
+                    onClick={() => createTelegramLink.mutate()}
+                    disabled={createTelegramLink.isPending}
+                  >
+                    <MessageCircle className="size-4" />
+                    {createTelegramLink.isPending ? "Generating..." : "Generate Telegram link code"}
+                  </Button>
+                )}
+
+                {telegramLink && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => createTelegramLink.mutate()}
+                    disabled={createTelegramLink.isPending}
+                  >
+                    Generate a new code
+                  </Button>
+                )}
+              </GlassCard>
+            </div>
+
             {/* My Prescriptions Widget */}
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
