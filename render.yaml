@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+
+services:
+  - type: web
+    name: citycare-clinic-api-25sarvesh2005
+    runtime: python
+    plan: free
+    region: singapore
+    branch: main
+    autoDeployTrigger: checksPass
+    buildCommand: python -m pip install -r requirements.txt
+    startCommand: python -m uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health/readiness
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.2
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: APP_ENV
+        value: production
+      - key: MONGO_URL
+        sync: false
+      - key: DB_NAME
+        value: citycare_clinic
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRE_MINUTES
+        value: "60"
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: SEED_DEMO_USERS
+        value: "false"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_API_BASE_URL
+        value: https://api.telegram.org
