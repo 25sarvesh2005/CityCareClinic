@@ -7,7 +7,7 @@ import logging
 import re
 import weakref
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from bson import ObjectId
 from fastapi import HTTPException
@@ -15,8 +15,9 @@ from odmantic import AIOEngine
 from odmantic.exceptions import DuplicateKeyError as ODManticDuplicateKeyError
 from pydantic import EmailStr, TypeAdapter, ValidationError
 
+from chatbot.prescription_assistant import is_emergency_message
 from core.apis.schemas.appointment_schema import BookAppointmentRequest
-from core.constants import Symptom, UserRole
+from core.constants import UserRole
 from core.cruds.user_crud import (
     find_user_by_telegram_id,
     link_user_to_telegram,
@@ -32,6 +33,18 @@ from telegram_bot.cruds import (
     recent_messages,
     save_session,
     store_update_replies,
+)
+from telegram_bot.conversation import (
+    NaturalIntent,
+    choice_index,
+    detect_intent,
+    is_affirmative,
+    is_cancel_message,
+    is_negative,
+    parse_natural_date,
+    parse_natural_time,
+    parse_symptoms,
+    parse_temperature,
 )
 from telegram_bot.medical_assistant import answer_medical_message
 from telegram_bot.models import TelegramSessionModel, TelegramUpdateModel
@@ -202,54 +215,62 @@ class TelegramGateway:
             await save_session(self.engine, session)
             return [TelegramReply(chat_id=chat_id, text="Conversation reset. Your account link is still active."), self._welcome(session, chat_id)]
         if command == "/register":
-            if await self._patient(session):
-                return [TelegramReply(chat_id=chat_id, text="Your Telegram account is already registered and linked.")]
-            self._clear_workflow(session)
-            session.state = "register_name"
-            await save_session(self.engine, session)
-            return [TelegramReply(chat_id=chat_id, text="What is your full name?")]
+            return await self._begin_registration(session, chat_id)
         if command == "/link":
             if await self._patient(session):
                 return [TelegramReply(chat_id=chat_id, text="This Telegram account is already linked.")]
             if argument.strip():
                 return await self._link(session, argument.strip(), chat_id)
-            session.state = "link_code"
-            await save_session(self.engine, session)
-            return [TelegramReply(chat_id=chat_id, text="Send the one-time link code generated from your authenticated Medihub account.")]
+            return await self._begin_linking(session, chat_id)
         if command == "/hospitals":
-            return await self._hospitals(chat_id)
+            return await self._hospitals(session, chat_id)
         if command == "/doctors":
-            return await self._doctors(chat_id, session.selected_hospital_id)
+            return await self._doctors(session, chat_id, session.selected_hospital_id)
         if command in {"/speciality", "/specialization"}:
             if argument.strip():
-                return await self._specialization(chat_id, argument.strip())
+                return await self._specialization(session, chat_id, argument.strip())
             session.state = "specialization"
             await save_session(self.engine, session)
             return [TelegramReply(chat_id=chat_id, text="Which specialization are you looking for? For example: cardiologist or general physician.")]
         if command == "/facilities":
             if session.selected_hospital_id:
                 return [await self._facility_reply(chat_id, session.selected_hospital_id)]
-            return await self._hospital_choices(chat_id, "Choose a hospital to view facilities:", "facilities")
+            return await self._hospital_choices(session, chat_id, "Which hospital's facilities would you like to see?", "facilities")
         if command == "/book":
             if not await self._patient(session):
                 return [self._registration_required(chat_id)]
             if session.selected_hospital_id and session.selected_doctor_id:
                 return await self._begin_booking(session, chat_id)
-            return await self._hospital_choices(chat_id, "Choose a hospital, then select a doctor:", "doctors")
+            return await self._hospital_choices(session, chat_id, "Which hospital would you like to book at?", "doctors")
         if command == "/appointments":
             return await self._appointments(session, chat_id)
         if command == "/prescriptions":
             return await self._prescriptions(session, chat_id)
 
+        if session.state != "idle" and is_cancel_message(text):
+            self._clear_workflow(session)
+            await save_session(self.engine, session)
+            return [
+                TelegramReply(
+                    chat_id=chat_id,
+                    text="No problem - I cancelled that step. What would you like help with instead?",
+                )
+            ]
+
         if text == "menu:hospitals":
-            return await self._hospitals(chat_id)
+            return await self._hospitals(session, chat_id)
         if text == "menu:doctors":
-            return await self._doctors(chat_id, session.selected_hospital_id)
+            return await self._doctors(session, chat_id, session.selected_hospital_id)
+        if text == "start_register":
+            return await self._begin_registration(session, chat_id)
+        if text == "start_link":
+            return await self._begin_linking(session, chat_id)
 
         if text.startswith("hospital:"):
             hospital_id = text.split(":", 1)[1]
             session.selected_hospital_id = hospital_id
             session.selected_doctor_id = None
+            session.state = "idle"
             await save_session(self.engine, session)
             hospital = await self.service.get_hospital(hospital_id)
             return [
@@ -262,8 +283,11 @@ class TelegramGateway:
                 )
             ]
         if text.startswith("doctors:"):
-            return await self._doctors(chat_id, text.split(":", 1)[1])
+            return await self._doctors(session, chat_id, text.split(":", 1)[1])
         if text.startswith("facilities:"):
+            session.selected_hospital_id = text.split(":", 1)[1]
+            session.state = "idle"
+            await save_session(self.engine, session)
             return [await self._facility_reply(chat_id, text.split(":", 1)[1])]
         if text.startswith("doctor:"):
             _, hospital_id, doctor_id = text.split(":", 2)
@@ -289,6 +313,23 @@ class TelegramGateway:
         if state_handler:
             return await state_handler(session, text, chat_id)
 
+        # Emergencies always stay on the fixed safety path, even if the message also
+        # contains words such as "doctor" or "appointment".
+        if is_emergency_message(text):
+            return await self._medical_conversation(session, text, chat_id)
+
+        intent = detect_intent(text)
+        if intent:
+            replies = await self._handle_natural_intent(session, intent, chat_id)
+            await self._remember_exchange(session, text, replies)
+            return replies
+
+        return await self._medical_conversation(session, text, chat_id)
+
+    async def _medical_conversation(
+        self, session: TelegramSessionModel, text: str, chat_id: str
+    ) -> List[TelegramReply]:
+        """Run one open-ended turn with the session's bounded conversation memory."""
         history = [
             {"role": item.role, "content": item.content}
             for item in await recent_messages(self.engine, str(session.id))
@@ -298,15 +339,122 @@ class TelegramGateway:
         await add_message(self.engine, str(session.id), "assistant", answer)
         return [TelegramReply(chat_id=chat_id, text=answer)]
 
+    async def _remember_exchange(
+        self,
+        session: TelegramSessionModel,
+        user_text: str,
+        replies: List[TelegramReply],
+    ) -> None:
+        """Keep natural action turns in the same short-term memory as health chat."""
+        await add_message(self.engine, str(session.id), "user", user_text)
+        response_text = "\n\n".join(reply.text for reply in replies if reply.text)
+        if response_text:
+            await add_message(self.engine, str(session.id), "assistant", response_text)
+
+    async def _handle_natural_intent(
+        self,
+        session: TelegramSessionModel,
+        intent: NaturalIntent,
+        chat_id: str,
+    ) -> List[TelegramReply]:
+        """Route inferred actions through the same patient-safe gateway methods."""
+        if intent.name in {"greeting", "help"}:
+            return [self._welcome(session, chat_id)]
+        if intent.name == "register":
+            return await self._begin_registration(session, chat_id)
+        if intent.name == "link":
+            return await self._begin_linking(session, chat_id)
+        if intent.name == "hospitals":
+            return await self._hospitals(session, chat_id)
+        if intent.name == "doctors":
+            return await self._doctors(session, chat_id, session.selected_hospital_id)
+        if intent.name == "specialization":
+            return await self._specialization(
+                session, chat_id, intent.specialization or ""
+            )
+        if intent.name == "facilities":
+            if session.selected_hospital_id:
+                return [
+                    await self._facility_reply(chat_id, session.selected_hospital_id)
+                ]
+            return await self._hospital_choices(
+                session,
+                chat_id,
+                "Sure - which hospital's facilities or services should I show?",
+                "facilities",
+            )
+        if intent.name == "book":
+            if not await self._patient(session):
+                return [self._registration_required(chat_id)]
+            if intent.specialization:
+                return await self._specialization(
+                    session, chat_id, intent.specialization
+                )
+            if session.selected_hospital_id and session.selected_doctor_id:
+                return await self._begin_booking(session, chat_id)
+            return await self._hospital_choices(
+                session,
+                chat_id,
+                "Let's book it. Which hospital would you prefer?",
+                "doctors",
+            )
+        if intent.name == "appointments":
+            return await self._appointments(session, chat_id)
+        if intent.name == "prescriptions":
+            return await self._prescriptions(session, chat_id)
+        return []
+
+    async def _begin_registration(
+        self, session: TelegramSessionModel, chat_id: str
+    ) -> List[TelegramReply]:
+        if await self._patient(session):
+            return [
+                TelegramReply(
+                    chat_id=chat_id,
+                    text="You're already registered and your patient account is linked.",
+                )
+            ]
+        self._clear_workflow(session)
+        session.state = "register_name"
+        await save_session(self.engine, session)
+        return [
+            TelegramReply(
+                chat_id=chat_id,
+                text="Absolutely - I can register you here. First, what's your full name?",
+            )
+        ]
+
+    async def _begin_linking(
+        self, session: TelegramSessionModel, chat_id: str
+    ) -> List[TelegramReply]:
+        if await self._patient(session):
+            return [
+                TelegramReply(
+                    chat_id=chat_id,
+                    text="Your Telegram account is already linked to a patient account.",
+                )
+            ]
+        self._clear_workflow(session)
+        session.state = "link_code"
+        await save_session(self.engine, session)
+        return [
+            TelegramReply(
+                chat_id=chat_id,
+                text="Send me the one-time link code from your Medihub patient account.",
+            )
+        ]
+
     def _welcome(self, session: TelegramSessionModel, chat_id: str) -> TelegramReply:
         linked = bool(session.patient_id)
         identity = "✅ Patient account linked" if linked else "ℹ️ Not registered yet — use /register or /link"
         return TelegramReply(
             chat_id=chat_id,
             text=(
-                "Welcome to the Medihub Patient Assistant.\n"
+                "Hi! I'm the Medihub Patient Assistant.\n"
                 f"{identity}\n\n"
-                "Chat about a health concern, or use:\n"
+                "Talk to me normally - for example: 'I have had a headache since "
+                "yesterday', 'find me a skin doctor', or 'book an appointment'.\n\n"
+                "If you prefer commands, use:\n"
                 "/hospitals — hospital list\n/doctors — available doctors\n"
                 "/speciality — find a specialist\n/book — book an appointment\n"
                 "/facilities — hospital services\n/appointments — your appointments\n"
@@ -338,40 +486,99 @@ class TelegramGateway:
     def _registration_required(chat_id: str) -> TelegramReply:
         return TelegramReply(
             chat_id=chat_id,
-            text="Registration is required for private patient operations. Use /register for a new account or /link CODE for an existing account.",
+            text=(
+                "Registration is required for private patient operations. "
+                "I can do that once I know which patient account is yours. "
+                "Would you like to register here or link your existing Medihub account?"
+            ),
+            reply_markup=inline_keyboard(
+                [[("Register here", "start_register"), ("Link account", "start_link")]]
+            ),
         )
 
-    async def _hospital_choices(self, chat_id: str, heading: str, action: str) -> List[TelegramReply]:
+    async def _hospital_choices(
+        self,
+        session: TelegramSessionModel,
+        chat_id: str,
+        heading: str,
+        action: str,
+    ) -> List[TelegramReply]:
         hospitals = await self.service.list_hospitals()
         if not hospitals:
-            return [TelegramReply(chat_id=chat_id, text="No active hospitals are available right now.")]
-        rows = [[(f"{item.name} — {item.city}", f"{action}:{item.hospital_id}")] for item in hospitals[:20]]
-        return [TelegramReply(chat_id=chat_id, text=heading, reply_markup=inline_keyboard(rows))]
+            return [TelegramReply(chat_id=chat_id, text="I couldn't find any active hospitals right now.")]
+        session.state = f"choose_hospital_{action}"
+        await save_session(self.engine, session)
+        visible = hospitals[:20]
+        rows = [[(f"{item.name} - {item.city}", f"{action}:{item.hospital_id}")] for item in visible]
+        numbered = "\n".join(
+            f"{index}. {item.name} - {item.city}"
+            for index, item in enumerate(visible, start=1)
+        )
+        return [
+            TelegramReply(
+                chat_id=chat_id,
+                text=f"{heading}\n\n{numbered}\n\nReply with the name or number, or tap a button.",
+                reply_markup=inline_keyboard(rows),
+            )
+        ]
 
-    async def _hospitals(self, chat_id: str) -> List[TelegramReply]:
-        return await self._hospital_choices(chat_id, "Available hospitals:", "hospital")
+    async def _hospitals(self, session: TelegramSessionModel, chat_id: str) -> List[TelegramReply]:
+        return await self._hospital_choices(
+            session, chat_id, "Here are the available hospitals:", "hospital"
+        )
 
-    async def _doctors(self, chat_id: str, hospital_id: Optional[str]) -> List[TelegramReply]:
+    async def _doctors(
+        self, session: TelegramSessionModel, chat_id: str, hospital_id: Optional[str]
+    ) -> List[TelegramReply]:
         if not hospital_id:
-            return await self._hospital_choices(chat_id, "Choose a hospital to view doctors:", "doctors")
+            return await self._hospital_choices(
+                session, chat_id, "Which hospital should I check for doctors?", "doctors"
+            )
         doctors = await self.service.list_doctors(hospital_id=hospital_id)
         if not doctors:
-            return [TelegramReply(chat_id=chat_id, text="No active doctors are listed at this hospital.")]
-        rows = [[(f"{doctor.name} — {doctor.specialization}", f"doctor:{hospital_id}:{doctor.profile_id}")] for doctor in doctors[:20]]
-        return [TelegramReply(chat_id=chat_id, text="Available doctors:", reply_markup=inline_keyboard(rows))]
+            return [TelegramReply(chat_id=chat_id, text="I couldn't find any active doctors at that hospital right now.")]
+        session.selected_hospital_id = hospital_id
+        session.state = "choose_doctor"
+        await save_session(self.engine, session)
+        visible = doctors[:20]
+        rows = [[(f"{doctor.name} - {doctor.specialization}", f"doctor:{hospital_id}:{doctor.profile_id}")] for doctor in visible]
+        numbered = "\n".join(
+            f"{index}. {doctor.name} - {doctor.specialization}"
+            for index, doctor in enumerate(visible, start=1)
+        )
+        return [
+            TelegramReply(
+                chat_id=chat_id,
+                text=f"These doctors are available:\n\n{numbered}\n\nTell me the doctor's name or number to see details.",
+                reply_markup=inline_keyboard(rows),
+            )
+        ]
 
-    async def _specialization(self, chat_id: str, query: str) -> List[TelegramReply]:
+    async def _specialization(
+        self, session: TelegramSessionModel, chat_id: str, query: str
+    ) -> List[TelegramReply]:
         doctors = await self.service.list_doctors(specialization=query)
         if not doctors:
-            return [TelegramReply(chat_id=chat_id, text=f"No active doctors matched “{query}”. Try a broader term.")]
+            return [TelegramReply(chat_id=chat_id, text=f"I couldn't find an active specialist matching '{query}'. Try a broader specialty or describe your concern.")]
+        session.last_specialization_query = query
+        session.state = "choose_specialist"
+        await save_session(self.engine, session)
         rows = []
-        for doctor in doctors[:20]:
+        numbered = []
+        for index, doctor in enumerate(doctors[:20], start=1):
             profile = await self.engine.find_one(
                 DoctorProfileModel, DoctorProfileModel.id == ObjectId(doctor.profile_id)
             )
             if profile:
-                rows.append([(f"{doctor.name} — {doctor.specialization}", f"doctor:{profile.hospital_id}:{doctor.profile_id}")])
-        return [TelegramReply(chat_id=chat_id, text=f"Doctors matching “{query}”:", reply_markup=inline_keyboard(rows))]
+                rows.append([(f"{doctor.name} - {doctor.specialization}", f"doctor:{profile.hospital_id}:{doctor.profile_id}")])
+                numbered.append(f"{index}. {doctor.name} - {doctor.specialization}")
+        return [
+            TelegramReply(
+                chat_id=chat_id,
+                text=f"I found these doctors for '{query}':\n\n" + "\n".join(numbered) + "\n\nReply with a doctor's name or number, or tap one below.",
+                reply_markup=inline_keyboard(rows),
+            )
+        ]
 
     async def _facility_reply(self, chat_id: str, hospital_id: str) -> TelegramReply:
         hospital = await self.service.get_hospital(hospital_id)
@@ -386,6 +593,8 @@ class TelegramGateway:
             raise HTTPException(status_code=404, detail="Doctor is no longer available.")
         session.selected_hospital_id = hospital_id
         session.selected_doctor_id = doctor_id
+        session.state = "idle"
+        session.last_specialization_query = None
         await save_session(self.engine, session)
         hours = ", ".join(f"{key}: {value}" for key, value in doctor.clinic_hours.items())
         return TelegramReply(
@@ -404,7 +613,16 @@ class TelegramGateway:
         session.booking_temperature = None
         session.booking_symptoms = []
         await save_session(self.engine, session)
-        return [TelegramReply(chat_id=chat_id, text="Enter the appointment date in YYYY-MM-DD format. Bookings are available from today through 7 days ahead.")]
+        return [
+            TelegramReply(
+                chat_id=chat_id,
+                text=(
+                    "Great - what day works for you? You can say today, tomorrow, "
+                    "a weekday, or a date such as 2026-08-28. Bookings are available "
+                    "through 7 days ahead."
+                ),
+            )
+        ]
 
     async def _confirm_booking(self, session: TelegramSessionModel, chat_id: str) -> List[TelegramReply]:
         patient = await self._patient(session)
@@ -481,10 +699,169 @@ class TelegramGateway:
         await save_session(self.engine, session)
         return [TelegramReply(chat_id=chat_id, text=f"✅ Linked securely. Welcome, {patient.name}.")]
 
+    async def _resolve_hospital_choice(self, text: str):
+        hospitals = (await self.service.list_hospitals())[:20]
+        selected_index = choice_index(text, hospitals)
+        if selected_index is not None:
+            return hospitals[selected_index]
+        query = re.sub(
+            r"\b(i choose|choose|select|hospital|clinic|number|option)\b",
+            " ",
+            text.casefold(),
+        )
+        query = re.sub(r"\s+", " ", query).strip()
+        if not query:
+            return None
+        exact = [item for item in hospitals if item.name.casefold() == query]
+        if len(exact) == 1:
+            return exact[0]
+        matches = [
+            item
+            for item in hospitals
+            if query in item.name.casefold()
+            or query in item.city.casefold()
+            or item.name.casefold() in query
+        ]
+        return matches[0] if len(matches) == 1 else None
+
+    async def _state_choose_hospital_hospital(
+        self, session: TelegramSessionModel, text: str, chat_id: str
+    ) -> List[TelegramReply]:
+        hospital = await self._resolve_hospital_choice(text)
+        if not hospital:
+            return await self._hospital_choices(
+                session,
+                chat_id,
+                "I couldn't tell which hospital you meant. Please use its name or number:",
+                "hospital",
+            )
+        session.selected_hospital_id = hospital.hospital_id
+        session.selected_doctor_id = None
+        session.state = "idle"
+        await save_session(self.engine, session)
+        return [
+            TelegramReply(
+                chat_id=chat_id,
+                text=f"🏥 {hospital.name}\n{hospital.address}, {hospital.city}\nContact: {hospital.contact_number}",
+                reply_markup=inline_keyboard(
+                    [[
+                        ("Doctors", f"doctors:{hospital.hospital_id}"),
+                        ("Facilities", f"facilities:{hospital.hospital_id}"),
+                    ]]
+                ),
+            )
+        ]
+
+    async def _state_choose_hospital_doctors(
+        self, session: TelegramSessionModel, text: str, chat_id: str
+    ) -> List[TelegramReply]:
+        hospital = await self._resolve_hospital_choice(text)
+        if not hospital:
+            return await self._hospital_choices(
+                session,
+                chat_id,
+                "I couldn't tell which hospital you meant. Please use its name or number:",
+                "doctors",
+            )
+        return await self._doctors(session, chat_id, hospital.hospital_id)
+
+    async def _state_choose_hospital_facilities(
+        self, session: TelegramSessionModel, text: str, chat_id: str
+    ) -> List[TelegramReply]:
+        hospital = await self._resolve_hospital_choice(text)
+        if not hospital:
+            return await self._hospital_choices(
+                session,
+                chat_id,
+                "I couldn't tell which hospital you meant. Please use its name or number:",
+                "facilities",
+            )
+        session.selected_hospital_id = hospital.hospital_id
+        session.state = "idle"
+        await save_session(self.engine, session)
+        return [await self._facility_reply(chat_id, hospital.hospital_id)]
+
+    async def _resolve_doctor_choice(
+        self,
+        session: TelegramSessionModel,
+        text: str,
+        chat_id: str,
+        *,
+        specialization: Optional[str] = None,
+    ) -> List[TelegramReply]:
+        doctors = (
+            await self.service.list_doctors(
+                hospital_id=None if specialization else session.selected_hospital_id,
+                specialization=specialization or "",
+            )
+        )[:20]
+        selected_index = choice_index(text, doctors)
+        doctor = doctors[selected_index] if selected_index is not None else None
+        if doctor is None:
+            query = re.sub(
+                r"\b(i choose|choose|select|doctor|dr|number|option)\b",
+                " ",
+                text.casefold(),
+            )
+            query = re.sub(r"\s+", " ", query).strip(" .")
+            exact = [item for item in doctors if item.name.casefold().removeprefix("dr. ") == query]
+            matches = exact or [
+                item
+                for item in doctors
+                if query
+                and (
+                    query in item.name.casefold()
+                    or item.name.casefold().removeprefix("dr. ") in query
+                )
+            ]
+            doctor = matches[0] if len(matches) == 1 else None
+        if doctor is None:
+            if specialization:
+                return await self._specialization(session, chat_id, specialization)
+            return await self._doctors(
+                session, chat_id, session.selected_hospital_id
+            )
+
+        hospital_id = session.selected_hospital_id
+        if specialization:
+            profile = await self.engine.find_one(
+                DoctorProfileModel,
+                DoctorProfileModel.id == ObjectId(doctor.profile_id),
+            )
+            hospital_id = profile.hospital_id if profile else None
+        if not hospital_id:
+            raise HTTPException(status_code=404, detail="Doctor's hospital is unavailable.")
+        return [
+            await self._doctor_reply(
+                session, chat_id, str(hospital_id), doctor.profile_id
+            )
+        ]
+
+    async def _state_choose_doctor(
+        self, session: TelegramSessionModel, text: str, chat_id: str
+    ) -> List[TelegramReply]:
+        return await self._resolve_doctor_choice(session, text, chat_id)
+
+    async def _state_choose_specialist(
+        self, session: TelegramSessionModel, text: str, chat_id: str
+    ) -> List[TelegramReply]:
+        return await self._resolve_doctor_choice(
+            session,
+            text,
+            chat_id,
+            specialization=session.last_specialization_query or "",
+        )
+
     async def _state_register_name(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
-        if len(text.strip()) < 2:
+        name = re.sub(
+            r"^(?:my name is|i am|i'm|this is)\s+",
+            "",
+            text.strip(),
+            flags=re.IGNORECASE,
+        ).strip()
+        if len(name) < 2:
             return [TelegramReply(chat_id=chat_id, text="Please enter your full name (at least 2 characters).")]
-        session.pending_name = text.strip()
+        session.pending_name = name
         session.state = "register_email"
         await save_session(self.engine, session)
         return [TelegramReply(chat_id=chat_id, text="What is your email address?")]
@@ -511,22 +888,55 @@ class TelegramGateway:
         return [TelegramReply(chat_id=chat_id, text=f"✅ Registration complete. Welcome, {patient.name}. You can now book appointments and view your private records.")]
 
     async def _state_link_code(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
-        return await self._link(session, text, chat_id)
+        code = re.sub(
+            r"^(?:my )?(?:link )?code is\s+",
+            "",
+            text.strip(),
+            flags=re.IGNORECASE,
+        ).strip()
+        return await self._link(session, code, chat_id)
 
     async def _state_specialization(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
         session.state = "idle"
         await save_session(self.engine, session)
-        return await self._specialization(chat_id, text)
+        inferred = detect_intent(f"find a {text} doctor")
+        query = inferred.specialization if inferred and inferred.specialization else text
+        return await self._specialization(session, chat_id, query)
 
     async def _state_book_date(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
-        slots = await self.service.available_slots(session.selected_hospital_id or "", session.selected_doctor_id or "", text)
+        requested_date = parse_natural_date(text)
+        if not requested_date:
+            return [
+                TelegramReply(
+                    chat_id=chat_id,
+                    text="I couldn't understand that date. Try 'tomorrow', 'Friday', or YYYY-MM-DD.",
+                )
+            ]
+        slots = await self.service.available_slots(session.selected_hospital_id or "", session.selected_doctor_id or "", requested_date)
         if not slots.available_slots:
             return [TelegramReply(chat_id=chat_id, text="No slots are available on that date. Please enter another date.")]
-        session.booking_date = text
+        session.booking_date = requested_date
         session.state = "book_slot"
         await save_session(self.engine, session)
         rows = [[(slot, f"slot:{slot}") for slot in slots.available_slots[index:index + 3]] for index in range(0, len(slots.available_slots), 3)]
-        return [TelegramReply(chat_id=chat_id, text="Choose an available time:", reply_markup=inline_keyboard(rows))]
+        return [TelegramReply(chat_id=chat_id, text="These times are available. Type a time such as '10 am' or tap one:", reply_markup=inline_keyboard(rows))]
+
+    async def _state_book_slot(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
+        requested_slot = parse_natural_time(text)
+        if not requested_slot:
+            return [TelegramReply(chat_id=chat_id, text="I couldn't understand that time. Try something like '10 am' or '5:30 pm'.")]
+        slots = await self.service.available_slots(
+            session.selected_hospital_id or "",
+            session.selected_doctor_id or "",
+            session.booking_date or "",
+        )
+        if requested_slot not in slots.available_slots:
+            available = ", ".join(slots.available_slots) or "none"
+            return [TelegramReply(chat_id=chat_id, text=f"That time isn't available. Current options are: {available}.")]
+        session.booking_slot = requested_slot
+        session.state = "book_reason"
+        await save_session(self.engine, session)
+        return [TelegramReply(chat_id=chat_id, text="What would you like the doctor to help you with? Please give me a short description.")]
 
     async def _state_book_reason(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
         if len(text.strip()) < 10:
@@ -537,28 +947,32 @@ class TelegramGateway:
         return [TelegramReply(chat_id=chat_id, text="What is the patient's current temperature in °F? Enter a number from 95 to 110.")]
 
     async def _state_book_temperature(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
-        try:
-            temperature = float(text)
-        except ValueError:
-            temperature = 0
-        if temperature < 95 or temperature > 110:
-            return [TelegramReply(chat_id=chat_id, text="Enter a valid temperature between 95 and 110 °F.")]
+        temperature = parse_temperature(text)
+        if temperature is None or temperature < 95 or temperature > 110:
+            return [TelegramReply(chat_id=chat_id, text="Please send a measured temperature between 95 and 110 °F, for example '98.6 F' or '37 C'.")]
         session.booking_temperature = temperature
         session.state = "book_symptoms"
         await save_session(self.engine, session)
-        return [TelegramReply(chat_id=chat_id, text="List one or more symptoms separated by commas: fever, cough, cold, bodyache, headache, other.")]
+        return [TelegramReply(chat_id=chat_id, text="What symptoms are you experiencing? You can describe them normally, for example 'fever, cough and body pain'.")]
 
     async def _state_book_symptoms(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
-        symptoms = [item.strip().casefold() for item in text.split(",") if item.strip()]
-        allowed = {item.value for item in Symptom}
-        invalid = [item for item in symptoms if item not in allowed]
-        if not symptoms or invalid:
-            return [TelegramReply(chat_id=chat_id, text=f"Use only: {', '.join(sorted(allowed))}.")]
-        session.booking_symptoms = list(dict.fromkeys(symptoms))
+        symptoms = parse_symptoms(text)
+        if not symptoms:
+            return [TelegramReply(chat_id=chat_id, text="Please describe at least one symptom. If it isn't in the common list, I'll record it as 'other'.")]
+        session.booking_symptoms = symptoms
         session.state = "book_confirm"
         await save_session(self.engine, session)
         summary = f"Confirm appointment:\nDate: {session.booking_date}\nTime: {session.booking_slot}\nReason: {session.booking_reason}\nTemperature: {session.booking_temperature} °F\nSymptoms: {', '.join(session.booking_symptoms)}"
-        return [TelegramReply(chat_id=chat_id, text=summary, reply_markup=inline_keyboard([[('✅ Confirm booking', 'confirm_booking'), ('❌ Cancel', 'cancel_booking')]]))]
+        return [TelegramReply(chat_id=chat_id, text=summary + "\n\nReply 'yes' to book it or 'no' to cancel.", reply_markup=inline_keyboard([[('✅ Confirm booking', 'confirm_booking'), ('❌ Cancel', 'cancel_booking')]]))]
+
+    async def _state_book_confirm(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
+        if is_affirmative(text):
+            return await self._confirm_booking(session, chat_id)
+        if is_negative(text) or is_cancel_message(text):
+            self._clear_workflow(session)
+            await save_session(self.engine, session)
+            return [TelegramReply(chat_id=chat_id, text="No problem - I cancelled the booking and didn't create an appointment.")]
+        return [TelegramReply(chat_id=chat_id, text="Please reply 'yes' to confirm the appointment or 'no' to cancel it.")]
 
     @staticmethod
     def _clear_workflow(session: TelegramSessionModel) -> None:
@@ -568,5 +982,6 @@ class TelegramGateway:
         session.booking_reason = None
         session.booking_temperature = None
         session.booking_symptoms = []
+        session.last_specialization_query = None
         session.pending_name = None
         session.pending_email = None

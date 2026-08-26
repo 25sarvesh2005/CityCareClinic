@@ -22,6 +22,7 @@ class TelegramSessionModel(Model):
     state: str = "idle"
     selected_hospital_id: Optional[str] = None
     selected_doctor_id: Optional[str] = None
+    last_specialization_query: Optional[str] = None
     booking_date: Optional[str] = None
     booking_slot: Optional[str] = None
     booking_reason: Optional[str] = None

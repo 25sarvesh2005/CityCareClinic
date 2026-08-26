@@ -311,3 +311,85 @@ async def test_group_chat_is_rejected_to_protect_patient_privacy(setup_db):
     }
     result = await dispatch(setup_db, update)
     assert "only in a private chat" in result.replies[0].text
+
+
+async def test_natural_language_routes_patient_operations_without_commands(
+    setup_db, booking_context, monkeypatch
+):
+    """Patients can discover and select doctors using ordinary text and numbers."""
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    greeting = await dispatch(setup_db, message(1000, 701000, "hello there"))
+    assert "Talk to me normally" in greeting.replies[0].text
+
+    specialists = await dispatch(
+        setup_db,
+        message(1001, 701000, "Can you find me a general physician?"),
+    )
+    assert "Dr. Booking Test" in specialists.replies[0].text
+    assert "name or number" in specialists.replies[0].text
+
+    selected = await dispatch(setup_db, message(1002, 701000, "number 1"))
+    assert "Dr. Booking Test" in selected.replies[0].text
+    assert "Specialization:" in selected.replies[0].text
+
+    private_request = await dispatch(
+        setup_db, message(1003, 701000, "show me my prescriptions")
+    )
+    assert "Registration is required" in private_request.replies[0].text
+    assert private_request.replies[0].reply_markup is not None
+
+
+async def test_complete_booking_can_be_done_as_a_natural_conversation(
+    setup_db, booking_context
+):
+    """Buttons remain optional throughout registration, discovery, and booking."""
+    user_id = 701001
+    started = await dispatch(
+        setup_db, message(1100, user_id, "I want to create a patient account")
+    )
+    assert "full name" in started.replies[0].text
+    await dispatch(setup_db, message(1101, user_id, "My name is Natural Patient"))
+    await dispatch(
+        setup_db, message(1102, user_id, "natural.patient@example.com")
+    )
+    registered = await dispatch(
+        setup_db, message(1103, user_id, "+919812345678")
+    )
+    assert "Welcome, Natural Patient" in registered.replies[0].text
+
+    hospitals = await dispatch(
+        setup_db, message(1104, user_id, "I need to book an appointment")
+    )
+    assert "Which hospital" in hospitals.replies[0].text
+    doctors = await dispatch(setup_db, message(1105, user_id, "1"))
+    assert "Dr. Booking Test" in doctors.replies[0].text
+    doctor = await dispatch(setup_db, message(1106, user_id, "first"))
+    assert "Specialization:" in doctor.replies[0].text
+
+    booking = await dispatch(
+        setup_db, message(1107, user_id, "please book an appointment")
+    )
+    assert "what day works" in booking.replies[0].text
+    available = await dispatch(setup_db, message(1108, user_id, "today"))
+    assert "Type a time" in available.replies[0].text
+    reason = await dispatch(setup_db, message(1109, user_id, "10 am"))
+    assert "help you with" in reason.replies[0].text
+    await dispatch(
+        setup_db,
+        message(1110, user_id, "I have had a persistent fever and body pain"),
+    )
+    await dispatch(setup_db, message(1111, user_id, "37.5 C"))
+    summary = await dispatch(
+        setup_db, message(1112, user_id, "fever with body pain")
+    )
+    assert "Reply 'yes'" in summary.replies[0].text
+    assert "Temperature: 99.5" in summary.replies[0].text
+
+    confirmed = await dispatch(setup_db, message(1113, user_id, "yes, book it"))
+    assert "Appointment booked" in confirmed.replies[0].text
+    patient = await setup_db.find_one(
+        UserModel, UserModel.telegram_user_id == str(user_id)
+    )
+    assert await setup_db.count(
+        AppointmentModel, AppointmentModel.patient_id == str(patient.id)
+    ) == 1

@@ -12,6 +12,23 @@ The Telegram interface is an additional patient surface. Existing web routes and
 - Telegram-native patient registration without collecting a password in bot chat
 - Secure linking of an existing web patient through a one-time, ten-minute code
 
+Natural language is the primary interface. Slash commands and inline buttons are
+shortcuts, not requirements. Patients can type requests such as:
+
+```text
+I have had a headache since yesterday.
+Find me a general physician.
+What services does the hospital have?
+I want to book an appointment.
+When is my next appointment?
+Show me my prescriptions.
+I need to register as a new patient.
+```
+
+Hospital and doctor choices can be answered by name or number. During booking,
+the bot understands relative dates and weekdays, ordinary time expressions, Celsius
+or Fahrenheit temperatures, symptom sentences, and conversational yes/no confirmation.
+
 ## Architecture
 
 The implementation follows the useful boundaries from Hermes Agent's gateway design:
@@ -101,12 +118,15 @@ lock is implemented.
 7. Open `https://t.me/<your_bot_username>`, press **Start**, and test:
 
 ```text
-/start
-/hospitals
-/doctors
-/speciality cardiology
-/register
+Hello
+Find me a general physician
+I want to register as a new patient
+I need to book an appointment
+Show me my prescriptions
 ```
+
+You can also test the equivalent shortcuts: `/hospitals`, `/doctors`,
+`/speciality cardiology`, `/register`, `/appointments`, and `/prescriptions`.
 
 To link an existing web patient, authenticate as that patient, call
 `POST /api/v1/telegram/link-code`, and send the returned `/link CODE` to the bot.
