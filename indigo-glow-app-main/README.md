@@ -24,7 +24,8 @@ Slot picker grouped into 🌅 Morning / 🌆 Evening
 
 Symptom multi-select toggles (exactly your 6 enums)
 
-Temperature input bounded to 95.0–110.0°F
+Temperature input supports °F or °C; Celsius is converted to the API's existing
+95.0–110.0°F storage contract before booking
 
 Cancel with confirmation modal (soft delete awareness)
 

@@ -16,6 +16,13 @@ import { RoleGuard } from "@/components/RoleGuard";
 import { Badge, Button, Field, GlassCard, Skeleton } from "@/components/ui-kit";
 import { api, SYMPTOMS, SYMPTOM_LABELS, type DoctorProfile, type Symptom } from "@/lib/api";
 import { useSession } from "@/lib/auth";
+import {
+  TEMPERATURE_LIMITS,
+  convertTemperatureInput,
+  isTemperatureInRange,
+  toFahrenheit,
+  type TemperatureUnit,
+} from "@/lib/temperature";
 
 export const Route = createFileRoute("/hospital-doctors")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -55,6 +62,7 @@ function HospitalDoctorsPage() {
   const [selectedSlot, setSelectedSlot] = useState<string>("");
   const [reason, setReason] = useState("");
   const [temperature, setTemperature] = useState<string>("98.6");
+  const [temperatureUnit, setTemperatureUnit] = useState<TemperatureUnit>("F");
   const [selectedSymptoms, setSelectedSymptoms] = useState<Symptom[]>(["fever"]);
   const [bookingBusy, setBookingBusy] = useState(false);
 
@@ -137,6 +145,12 @@ function HospitalDoctorsPage() {
     }
   }
 
+  function changeTemperatureUnit(nextUnit: TemperatureUnit) {
+    if (nextUnit === temperatureUnit) return;
+    setTemperature((current) => convertTemperatureInput(current, temperatureUnit, nextUnit));
+    setTemperatureUnit(nextUnit);
+  }
+
   async function handleBook(e: React.FormEvent) {
     e.preventDefault();
     if (!user) {
@@ -157,10 +171,14 @@ function HospitalDoctorsPage() {
       return;
     }
     const tempNum = parseFloat(temperature);
-    if (isNaN(tempNum) || tempNum < 95.0 || tempNum > 110.0) {
-      toast.error("Temperature must be between 95.0°F and 110.0°F");
+    const limits = TEMPERATURE_LIMITS[temperatureUnit];
+    if (!isTemperatureInRange(tempNum, temperatureUnit)) {
+      toast.error(
+        `Temperature must be between ${limits.min.toFixed(1)}°${temperatureUnit} and ${limits.max.toFixed(1)}°${temperatureUnit}`,
+      );
       return;
     }
+    const temperatureFahrenheit = toFahrenheit(tempNum, temperatureUnit);
 
     setBookingBusy(true);
     try {
@@ -170,7 +188,8 @@ function HospitalDoctorsPage() {
         date: selectedDate,
         slot: selectedSlot,
         reason,
-        temperature: tempNum,
+        // The API and existing records use Fahrenheit. Celsius is converted at the UI boundary.
+        temperature: temperatureFahrenheit,
         symptoms: selectedSymptoms,
       });
       toast.success("Appointment booked successfully!");
@@ -382,12 +401,46 @@ function HospitalDoctorsPage() {
                           onChange={(e) => setReason(e.target.value)}
                         />
                       </div>
-                      <Field
-                        label="Temperature (°F)"
-                        placeholder="98.6"
-                        value={temperature}
-                        onChange={(e) => setTemperature(e.target.value)}
-                      />
+                      <div className="space-y-2">
+                        <div
+                          className="grid grid-cols-2 rounded-xl border border-glass-border bg-secondary/30 p-1"
+                          role="group"
+                          aria-label="Temperature unit"
+                        >
+                          {(["F", "C"] as const).map((unit) => (
+                            <button
+                              key={unit}
+                              type="button"
+                              onClick={() => changeTemperatureUnit(unit)}
+                              aria-pressed={temperatureUnit === unit}
+                              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                                temperatureUnit === unit
+                                  ? "bg-cyan text-cyan-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              °{unit}
+                            </button>
+                          ))}
+                        </div>
+                        <Field
+                          label={`Temperature (°${temperatureUnit})`}
+                          type="number"
+                          inputMode="decimal"
+                          step="0.1"
+                          min={TEMPERATURE_LIMITS[temperatureUnit].min}
+                          max={TEMPERATURE_LIMITS[temperatureUnit].max}
+                          placeholder={TEMPERATURE_LIMITS[temperatureUnit].defaultValue}
+                          value={temperature}
+                          onChange={(e) => setTemperature(e.target.value)}
+                          hint={
+                            temperatureUnit === "C" &&
+                            isTemperatureInRange(Number.parseFloat(temperature), temperatureUnit)
+                              ? `Equivalent to ${toFahrenheit(Number.parseFloat(temperature), "C").toFixed(1)}°F in the medical record`
+                              : "Choose °F or °C; records remain standardized in °F"
+                          }
+                        />
+                      </div>
                     </div>
 
                     <div className="pt-2 flex justify-end">

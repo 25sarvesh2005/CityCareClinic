@@ -7,6 +7,7 @@ existing gateway while still allowing patients to speak naturally.
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from difflib import get_close_matches
 import re
 from typing import Optional, Sequence, TypeVar
 
@@ -45,9 +46,25 @@ def _plain(text: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9+'-]+", " ", text.casefold())).strip()
 
 
+def _correct_status_typos(text: str) -> str:
+    """Normalize common near-miss spellings in short registration questions."""
+    targets = ("registered", "registration", "complete")
+    corrected = []
+    for token in text.split():
+        if token in {"register", *targets}:
+            corrected.append(token)
+            continue
+        if token.startswith(("reg", "complet")):
+            match = get_close_matches(token, targets, n=1, cutoff=0.7)
+            corrected.append(match[0] if match else token)
+        else:
+            corrected.append(token)
+    return " ".join(corrected)
+
+
 def extract_specialization(text: str) -> Optional[str]:
     """Return a stable specialization search stem from common patient wording."""
-    normalized = _plain(text)
+    normalized = _correct_status_typos(_plain(text))
     for search_stem, aliases in SPECIALIZATION_ALIASES.items():
         if any(re.search(rf"\b{re.escape(alias)}\b", normalized) for alias in aliases):
             return search_stem
@@ -60,10 +77,17 @@ def extract_specialization(text: str) -> Optional[str]:
 
 def detect_intent(text: str) -> Optional[NaturalIntent]:
     """Recognize high-confidence hospital actions without treating IDs as trusted."""
-    normalized = _plain(text)
+    normalized = _correct_status_typos(_plain(text))
     if not normalized:
         return None
 
+    if re.search(
+        r"\b(am i registered|is my (?:patient )?(?:registration|account) (?:complete|registered|active|linked)|"
+        r"registration status|account status|check my registration|did i (?:finish|complete) registration|"
+        r"do you (?:know|recognize) me)\b",
+        normalized,
+    ):
+        return NaturalIntent("account_status")
     if re.search(
         r"\b(register|sign up|signup|create (?:an? |my )?(?:patient )?account|new patient)\b",
         normalized,
@@ -76,6 +100,16 @@ def detect_intent(text: str) -> Optional[NaturalIntent]:
     if re.search(r"\b(facilities|facility|services|service|pharmacy|laboratory|lab)\b", normalized):
         return NaturalIntent("facilities")
     specialization = extract_specialization(normalized)
+    if re.search(
+        r"\b(?:is|was|has|did) (?:my |the )?(?:appointment |booking )?request "
+        r"(?:approved|accepted|rejected|cancelled|completed|reviewed)\b|"
+        r"\b(?:appointment|booking|request) (?:approval |current )?status\b|"
+        r"\b(?:appointment|booking) (?:approved|accepted|rejected|cancelled|completed|pending)\b|"
+        r"\bdid (?:the |my )?doctor (?:approve|accept|reject|review)\b|"
+        r"\bhas (?:the |my )?doctor (?:approved|accepted|rejected|reviewed)\b",
+        normalized,
+    ):
+        return NaturalIntent("appointment_status")
     if re.search(
         r"\b(book|schedule|make|need|want)\b.{0,30}\b(appointment|consultation|visit)\b|"
         r"\b(appointment|consultation)\b.{0,20}\b(book|schedule)\b",

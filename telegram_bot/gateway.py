@@ -46,7 +46,7 @@ from telegram_bot.conversation import (
     parse_symptoms,
     parse_temperature,
 )
-from telegram_bot.medical_assistant import answer_medical_message
+from telegram_bot.medical_assistant import resolve_patient_message
 from telegram_bot.models import TelegramSessionModel, TelegramUpdateModel
 from telegram_bot.patient_service import TelegramPatientService
 from telegram_bot.schemas import TelegramDispatch, TelegramReply
@@ -70,6 +70,79 @@ def inline_keyboard(rows: List[List[tuple[str, str]]]) -> dict:
             for row in rows
         ]
     }
+
+
+def _explicit_booking_time(text: str) -> Optional[str]:
+    """Extract a time only when the message clearly presents one as a time."""
+    if not re.search(
+        r"\b(?:at\s+|for\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|"
+        r"\b(?:noon|midnight)\b|\b\d{1,2}:\d{2}\b",
+        text.casefold(),
+    ):
+        return None
+    return parse_natural_time(text)
+
+
+def _explicit_booking_temperature(text: str) -> Optional[float]:
+    """Avoid confusing dates, times, or durations with body temperature."""
+    match = re.search(
+        r"(?:\btemp(?:erature)?\b\s*(?:is|of|=|:)?\s*\d{2,3}(?:\.\d+)?\s*°?\s*[fc]?\b|"
+        r"\b\d{2,3}(?:\.\d+)?\s*°\s*[fc]\b|"
+        r"\b\d{2,3}(?:\.\d+)?\s+[fc]\b)",
+        text.casefold(),
+    )
+    return parse_temperature(match.group(0)) if match else None
+
+
+def _combined_booking_reason(text: str) -> Optional[str]:
+    """Extract a visit reason from a message that may also contain logistics."""
+    normalized = re.sub(r"\s+", " ", text.strip())
+    reason_text = re.sub(
+        r"\b(?:at|for)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)\b",
+        " ",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    candidates = []
+    for match in re.finditer(
+        r"\b(?:reason(?:\s+is)?|because(?:\s+of)?|due\s+to|for)\s+(.+)",
+        reason_text,
+        flags=re.IGNORECASE,
+    ):
+        candidate = match.group(1).strip(" ,.-")
+        if re.match(r"\d{1,2}(?::\d{2})?\s*(?:am|pm)\b", candidate, re.IGNORECASE):
+            continue
+        candidate = re.split(
+            r"[,;]?\s*\b(?:with\s+)?(?:a\s+)?temp(?:erature)?\b",
+            candidate,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0].strip(" ,.-")
+        if len(candidate) >= 10:
+            candidates.append(candidate)
+    if candidates:
+        return candidates[0]
+
+    if re.search(
+        r"\b(pain|ache|fever|cough|cold|rash|dizz|nause|vomit|breath|"
+        r"sick|unwell|checkup|check-up|consultation|injury|symptom)\b",
+        normalized,
+        flags=re.IGNORECASE,
+    ) and len(normalized) >= 10:
+        return normalized
+    return None
+
+
+def _combined_booking_symptoms(text: str) -> List[str]:
+    """Infer symptoms only when health language is actually present."""
+    if not re.search(
+        r"\b(pain|ache|fever|cough|cold|rash|dizz|nause|vomit|breath|"
+        r"sick|unwell|injury|symptom|head|body|stomach|throat)\b",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        return []
+    return parse_symptoms(text)
 
 
 class TelegramGateway:
@@ -299,9 +372,7 @@ class TelegramGateway:
             return await self._begin_booking(session, chat_id)
         if text.startswith("slot:") and session.state == "book_slot":
             session.booking_slot = text.split(":", 1)[1]
-            session.state = "book_reason"
-            await save_session(self.engine, session)
-            return [TelegramReply(chat_id=chat_id, text="Briefly describe the reason for the visit (at least 10 characters).")]
+            return await self._consume_booking_details(session, "", chat_id)
         if text == "confirm_booking" and session.state == "book_confirm":
             return await self._confirm_booking(session, chat_id)
         if text == "cancel_booking":
@@ -329,13 +400,30 @@ class TelegramGateway:
     async def _medical_conversation(
         self, session: TelegramSessionModel, text: str, chat_id: str
     ) -> List[TelegramReply]:
-        """Run one open-ended turn with the session's bounded conversation memory."""
+        """Resolve a contextual turn, then execute verified operations in the gateway."""
         history = [
             {"role": item.role, "content": item.content}
             for item in await recent_messages(self.engine, str(session.id))
         ]
+        decision = await resolve_patient_message(text, history)
+        if decision.intent not in {"medical_chat", "greeting", "help"}:
+            replies = await self._handle_natural_intent(
+                session,
+                NaturalIntent(
+                    decision.intent,
+                    specialization=decision.specialization,
+                ),
+                chat_id,
+            )
+            if replies:
+                await self._remember_exchange(session, text, replies)
+                return replies
+
+        answer = decision.reply or (
+            "I can help with your health concern, doctors, appointments, facilities, "
+            "registration, and patient records. What would you like to do?"
+        )
         await add_message(self.engine, str(session.id), "user", text)
-        answer = await answer_medical_message(text, history)
         await add_message(self.engine, str(session.id), "assistant", answer)
         return [TelegramReply(chat_id=chat_id, text=answer)]
 
@@ -360,6 +448,8 @@ class TelegramGateway:
         """Route inferred actions through the same patient-safe gateway methods."""
         if intent.name in {"greeting", "help"}:
             return [self._welcome(session, chat_id)]
+        if intent.name == "account_status":
+            return await self._account_status(session, chat_id)
         if intent.name == "register":
             return await self._begin_registration(session, chat_id)
         if intent.name == "link":
@@ -400,9 +490,41 @@ class TelegramGateway:
             )
         if intent.name == "appointments":
             return await self._appointments(session, chat_id)
+        if intent.name == "appointment_status":
+            return await self._appointments(session, chat_id, focus_status=True)
         if intent.name == "prescriptions":
             return await self._prescriptions(session, chat_id)
         return []
+
+    async def _account_status(
+        self, session: TelegramSessionModel, chat_id: str
+    ) -> List[TelegramReply]:
+        """Explain verified registration/link status in ordinary patient language."""
+        patient = await self._patient(session)
+        if patient:
+            return [
+                TelegramReply(
+                    chat_id=chat_id,
+                    text=(
+                        f"Yes - your registration is complete, {patient.name}. "
+                        "This Telegram account is linked to your Medihub patient profile, "
+                        "so you can book appointments and view your private records here."
+                    ),
+                )
+            ]
+        return [
+            TelegramReply(
+                chat_id=chat_id,
+                text=(
+                    "I don't see a Medihub patient profile linked to this Telegram account yet. "
+                    "If you already registered on the web portal, link that account; otherwise, "
+                    "you can register here."
+                ),
+                reply_markup=inline_keyboard(
+                    [[("Register here", "start_register"), ("Link account", "start_link")]]
+                ),
+            )
+        ]
 
     async def _begin_registration(
         self, session: TelegramSessionModel, chat_id: str
@@ -642,14 +764,57 @@ class TelegramGateway:
         await save_session(self.engine, session)
         return [TelegramReply(chat_id=chat_id, text=f"✅ Appointment booked for {appointment.date} at {appointment.slot}.\nStatus: {appointment.status}\nAppointment ID: {appointment.appointment_id}")]
 
-    async def _appointments(self, session: TelegramSessionModel, chat_id: str) -> List[TelegramReply]:
+    async def _appointments(
+        self,
+        session: TelegramSessionModel,
+        chat_id: str,
+        *,
+        focus_status: bool = False,
+    ) -> List[TelegramReply]:
         patient = await self._patient(session)
         if not patient:
             return [self._registration_required(chat_id)]
         appointments = await self.service.appointments(patient)
         if not appointments:
-            return [TelegramReply(chat_id=chat_id, text="You do not have any appointments yet.")]
-        lines = [f"• {item.date} at {item.slot} — {item.status}{' (cancelled)' if item.is_cancelled else ''}" for item in appointments[:20]]
+            text = (
+                "You do not have an appointment request to check yet."
+                if focus_status
+                else "You do not have any appointments yet."
+            )
+            return [TelegramReply(chat_id=chat_id, text=text)]
+
+        def status_value(item) -> str:
+            if item.is_cancelled:
+                return "cancelled"
+            value = item.status.value if hasattr(item.status, "value") else item.status
+            return str(value or "pending").casefold()
+
+        descriptions = {
+            "pending": "pending — waiting for the doctor's approval",
+            "accepted": "approved and accepted by the doctor",
+            "rejected": "not approved; the doctor rejected the request",
+            "completed": "completed",
+            "cancelled": "cancelled",
+        }
+        if focus_status:
+            latest = appointments[0]
+            status = status_value(latest)
+            detail = descriptions.get(status, status)
+            return [
+                TelegramReply(
+                    chat_id=chat_id,
+                    text=(
+                        f"Your latest appointment request for {latest.date} at "
+                        f"{latest.slot} is {detail}."
+                    ),
+                )
+            ]
+
+        lines = [
+            f"• {item.date} at {item.slot} — "
+            f"{descriptions.get(status_value(item), status_value(item))}"
+            for item in appointments[:20]
+        ]
         return [TelegramReply(chat_id=chat_id, text="Your appointments:\n" + "\n".join(lines))]
 
     async def _prescriptions(self, session: TelegramSessionModel, chat_id: str) -> List[TelegramReply]:
@@ -658,7 +823,55 @@ class TelegramGateway:
             return [self._registration_required(chat_id)]
         prescriptions = await self.service.prescriptions(patient)
         if not prescriptions:
-            return [TelegramReply(chat_id=chat_id, text="No prescriptions are available in your account.")]
+            appointments = await self.service.appointments(patient)
+            status_values = [
+                str(item.status.value if hasattr(item.status, "value") else item.status).casefold()
+                for item in appointments
+                if not item.is_cancelled
+            ]
+            accepted_count = status_values.count("accepted")
+            pending_count = status_values.count("pending")
+            completed_count = status_values.count("completed")
+
+            if completed_count:
+                explanation = (
+                    f"I found {completed_count} completed visit"
+                    f"{'s' if completed_count != 1 else ''}, but no prescription was "
+                    "submitted to your Medihub account. If the doctor gave you one during "
+                    "the consultation, please ask the hospital to upload or attach it to your record."
+                )
+            elif accepted_count:
+                explanation = (
+                    f"I can see {accepted_count} accepted appointment"
+                    f"{'s' if accepted_count != 1 else ''}, but the doctor hasn't submitted "
+                    "a prescription for them yet. Accepted means the appointment was approved; "
+                    "a prescription appears only after the consultation when the doctor creates one. "
+                    "If your visit already happened, please contact the hospital or doctor and ask "
+                    "them to complete the consultation record."
+                )
+            elif pending_count:
+                explanation = (
+                    f"I found {pending_count} appointment request"
+                    f"{'s' if pending_count != 1 else ''} still waiting for approval, and there "
+                    "is no prescription yet. A doctor can add one after an accepted consultation."
+                )
+            elif appointments:
+                explanation = (
+                    "I found appointment history in your account, but no completed consultation "
+                    "with a prescription. Cancelled or rejected appointments do not produce one."
+                )
+            else:
+                explanation = (
+                    "I checked the Medihub account linked to this Telegram chat, but it has no "
+                    "appointments or prescriptions yet. If your previous visit used another account, "
+                    "please ask the hospital to verify which patient profile contains that visit."
+                )
+            return [
+                TelegramReply(
+                    chat_id=chat_id,
+                    text=f"I checked your linked account, {patient.name}. {explanation}",
+                )
+            ]
         replies = []
         for prescription in prescriptions[:10]:
             medicines = "\n".join(
@@ -904,66 +1117,167 @@ class TelegramGateway:
         return await self._specialization(session, chat_id, query)
 
     async def _state_book_date(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
-        requested_date = parse_natural_date(text)
-        if not requested_date:
+        return await self._consume_booking_details(session, text, chat_id)
+
+    async def _state_book_slot(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
+        return await self._consume_booking_details(session, text, chat_id)
+
+    async def _state_book_reason(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
+        return await self._consume_booking_details(session, text, chat_id)
+
+    async def _state_book_temperature(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
+        return await self._consume_booking_details(session, text, chat_id)
+
+    async def _state_book_symptoms(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
+        return await self._consume_booking_details(session, text, chat_id)
+
+    async def _consume_booking_details(
+        self, session: TelegramSessionModel, text: str, chat_id: str
+    ) -> List[TelegramReply]:
+        """Consume every booking detail present, then ask only for the first missing one."""
+        incoming_state = session.state
+
+        if not session.booking_date:
+            session.booking_date = parse_natural_date(text)
+        if not session.booking_slot:
+            session.booking_slot = (
+                parse_natural_time(text)
+                if incoming_state == "book_slot"
+                else _explicit_booking_time(text)
+            )
+        if not session.booking_reason:
+            reason = (
+                text.strip()
+                if incoming_state == "book_reason" and len(text.strip()) >= 10
+                else _combined_booking_reason(text)
+            )
+            session.booking_reason = reason
+        if session.booking_temperature is None:
+            temperature = (
+                parse_temperature(text)
+                if incoming_state == "book_temperature"
+                else _explicit_booking_temperature(text)
+            )
+            if temperature is not None and 95 <= temperature <= 110:
+                session.booking_temperature = temperature
+        if not session.booking_symptoms:
+            session.booking_symptoms = (
+                parse_symptoms(text)
+                if incoming_state == "book_symptoms"
+                else _combined_booking_symptoms(text)
+            )
+
+        if not session.booking_date:
+            session.state = "book_date"
+            await save_session(self.engine, session)
             return [
                 TelegramReply(
                     chat_id=chat_id,
-                    text="I couldn't understand that date. Try 'tomorrow', 'Friday', or YYYY-MM-DD.",
+                    text="What day works for you? You can say 'tomorrow', a weekday, or YYYY-MM-DD.",
                 )
             ]
-        slots = await self.service.available_slots(session.selected_hospital_id or "", session.selected_doctor_id or "", requested_date)
-        if not slots.available_slots:
-            return [TelegramReply(chat_id=chat_id, text="No slots are available on that date. Please enter another date.")]
-        session.booking_date = requested_date
-        session.state = "book_slot"
-        await save_session(self.engine, session)
-        rows = [[(slot, f"slot:{slot}") for slot in slots.available_slots[index:index + 3]] for index in range(0, len(slots.available_slots), 3)]
-        return [TelegramReply(chat_id=chat_id, text="These times are available. Type a time such as '10 am' or tap one:", reply_markup=inline_keyboard(rows))]
 
-    async def _state_book_slot(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
-        requested_slot = parse_natural_time(text)
-        if not requested_slot:
-            return [TelegramReply(chat_id=chat_id, text="I couldn't understand that time. Try something like '10 am' or '5:30 pm'.")]
         slots = await self.service.available_slots(
             session.selected_hospital_id or "",
             session.selected_doctor_id or "",
-            session.booking_date or "",
+            session.booking_date,
         )
-        if requested_slot not in slots.available_slots:
-            available = ", ".join(slots.available_slots) or "none"
-            return [TelegramReply(chat_id=chat_id, text=f"That time isn't available. Current options are: {available}.")]
-        session.booking_slot = requested_slot
-        session.state = "book_reason"
-        await save_session(self.engine, session)
-        return [TelegramReply(chat_id=chat_id, text="What would you like the doctor to help you with? Please give me a short description.")]
+        if not slots.available_slots:
+            session.booking_date = None
+            session.booking_slot = None
+            session.state = "book_date"
+            await save_session(self.engine, session)
+            return [
+                TelegramReply(
+                    chat_id=chat_id,
+                    text="No slots are available on that date. What other day would work?",
+                )
+            ]
 
-    async def _state_book_reason(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
-        if len(text.strip()) < 10:
-            return [TelegramReply(chat_id=chat_id, text="Please describe the reason in at least 10 characters.")]
-        session.booking_reason = text.strip()
-        session.state = "book_temperature"
-        await save_session(self.engine, session)
-        return [TelegramReply(chat_id=chat_id, text="What is the patient's current temperature in °F? Enter a number from 95 to 110.")]
+        if session.booking_slot and session.booking_slot not in slots.available_slots:
+            unavailable_slot = session.booking_slot
+            session.booking_slot = None
+            session.state = "book_slot"
+            await save_session(self.engine, session)
+            available = ", ".join(slots.available_slots)
+            return [
+                TelegramReply(
+                    chat_id=chat_id,
+                    text=(
+                        f"{unavailable_slot} isn't available on {session.booking_date}. "
+                        f"Current options are: {available}."
+                    ),
+                )
+            ]
 
-    async def _state_book_temperature(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
-        temperature = parse_temperature(text)
-        if temperature is None or temperature < 95 or temperature > 110:
-            return [TelegramReply(chat_id=chat_id, text="Please send a measured temperature between 95 and 110 °F, for example '98.6 F' or '37 C'.")]
-        session.booking_temperature = temperature
-        session.state = "book_symptoms"
-        await save_session(self.engine, session)
-        return [TelegramReply(chat_id=chat_id, text="What symptoms are you experiencing? You can describe them normally, for example 'fever, cough and body pain'.")]
+        if not session.booking_slot:
+            session.state = "book_slot"
+            await save_session(self.engine, session)
+            rows = [
+                [(slot, f"slot:{slot}") for slot in slots.available_slots[index : index + 3]]
+                for index in range(0, len(slots.available_slots), 3)
+            ]
+            return [
+                TelegramReply(
+                    chat_id=chat_id,
+                    text=(
+                        f"I saved {session.booking_date}. What time would you prefer? "
+                        "Type a time such as '10 am' or tap one:"
+                    ),
+                    reply_markup=inline_keyboard(rows),
+                )
+            ]
 
-    async def _state_book_symptoms(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
-        symptoms = parse_symptoms(text)
-        if not symptoms:
-            return [TelegramReply(chat_id=chat_id, text="Please describe at least one symptom. If it isn't in the common list, I'll record it as 'other'.")]
-        session.booking_symptoms = symptoms
+        if not session.booking_reason:
+            session.state = "book_reason"
+            await save_session(self.engine, session)
+            return [
+                TelegramReply(
+                    chat_id=chat_id,
+                    text=(
+                        f"I saved {session.booking_date} at {session.booking_slot}. "
+                        "What would you like the doctor to help you with?"
+                    ),
+                )
+            ]
+
+        if session.booking_temperature is None:
+            session.state = "book_temperature"
+            await save_session(self.engine, session)
+            return [
+                TelegramReply(
+                    chat_id=chat_id,
+                    text="What is the patient's current temperature? You can send °F or °C.",
+                )
+            ]
+
+        if not session.booking_symptoms:
+            session.state = "book_symptoms"
+            await save_session(self.engine, session)
+            return [
+                TelegramReply(
+                    chat_id=chat_id,
+                    text="What symptoms are you experiencing? Describe them normally.",
+                )
+            ]
+
         session.state = "book_confirm"
         await save_session(self.engine, session)
-        summary = f"Confirm appointment:\nDate: {session.booking_date}\nTime: {session.booking_slot}\nReason: {session.booking_reason}\nTemperature: {session.booking_temperature} °F\nSymptoms: {', '.join(session.booking_symptoms)}"
-        return [TelegramReply(chat_id=chat_id, text=summary + "\n\nReply 'yes' to book it or 'no' to cancel.", reply_markup=inline_keyboard([[('✅ Confirm booking', 'confirm_booking'), ('❌ Cancel', 'cancel_booking')]]))]
+        summary = (
+            f"Confirm appointment:\nDate: {session.booking_date}\n"
+            f"Time: {session.booking_slot}\nReason: {session.booking_reason}\n"
+            f"Temperature: {session.booking_temperature} °F\n"
+            f"Symptoms: {', '.join(session.booking_symptoms)}"
+        )
+        return [
+            TelegramReply(
+                chat_id=chat_id,
+                text=summary + "\n\nReply 'yes' to book it or 'no' to cancel.",
+                reply_markup=inline_keyboard(
+                    [[("✅ Confirm booking", "confirm_booking"), ("❌ Cancel", "cancel_booking")]]
+                ),
+            )
+        ]
 
     async def _state_book_confirm(self, session: TelegramSessionModel, text: str, chat_id: str) -> List[TelegramReply]:
         if is_affirmative(text):

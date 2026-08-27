@@ -236,9 +236,9 @@ Rules:
         temperature=0.2,
     )
 
-    primary_model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+    primary_model = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
     candidate_models = [primary_model]
-    for fallback_model in ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"]:
+    for fallback_model in [os.environ.get("GEMINI_FALLBACK_MODEL", "gemini-3.1-flash-lite")]:
         if fallback_model not in candidate_models:
             candidate_models.append(fallback_model)
 

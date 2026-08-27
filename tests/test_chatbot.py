@@ -521,8 +521,8 @@ async def test_gemini_model_fallback_on_quota_error(monkeypatch, setup_db):
     class MockModels:
         def generate_content(self, model, contents, config):
             attempted_models.append(model)
-            if model == "gemini-2.0-flash":
-                raise RuntimeError("429 RESOURCE_EXHAUSTED: Quota exceeded for gemini-2.0-flash")
+            if model == "gemini-3.6-flash":
+                raise RuntimeError("429 RESOURCE_EXHAUSTED: Quota exceeded for gemini-3.6-flash")
             
             # Fallback model succeeds
             class Candidate:
@@ -537,6 +537,8 @@ async def test_gemini_model_fallback_on_quota_error(monkeypatch, setup_db):
         models = MockModels()
 
     monkeypatch.setenv("GEMINI_API_KEY", "fake-gemini-key")
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-3.6-flash")
+    monkeypatch.setenv("GEMINI_FALLBACK_MODEL", "gemini-3.1-flash-lite")
     monkeypatch.setattr(
         "chatbot.gemini_client.get_gemini_client",
         lambda: MockGeminiClient(),
@@ -556,5 +558,6 @@ async def test_gemini_model_fallback_on_quota_error(monkeypatch, setup_db):
     )
 
     assert result == "Fallback Gemini Answer"
-    assert "gemini-2.0-flash" in attempted_models
+    assert attempted_models[0] == "gemini-3.6-flash"
+    assert "gemini-3.1-flash-lite" in attempted_models
     assert len(attempted_models) >= 2

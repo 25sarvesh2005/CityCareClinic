@@ -5,6 +5,7 @@ from datetime import date
 
 import pytest
 
+from core.constants import AppointmentStatus
 from core.models.appointment_model import AppointmentModel
 from core.models.hospital_model import HospitalModel
 from core.models.user_model import UserModel
@@ -197,10 +198,7 @@ async def test_registered_patient_books_only_after_explicit_confirmation(
         setup_db,
         message(413, user_id, "Persistent fever and body pain"),
     )
-    await dispatch(setup_db, message(414, user_id, "99.5"))
-    summary = await dispatch(
-        setup_db, message(415, user_id, "fever, bodyache")
-    )
+    summary = await dispatch(setup_db, message(414, user_id, "99.5"))
     assert "Confirm appointment" in summary.replies[0].text
     assert await setup_db.count(
         AppointmentModel, AppointmentModel.patient_id == str(patient.id)
@@ -339,6 +337,72 @@ async def test_natural_language_routes_patient_operations_without_commands(
     assert private_request.replies[0].reply_markup is not None
 
 
+async def test_registration_status_uses_verified_telegram_identity(setup_db):
+    unlinked = await dispatch(
+        setup_db, message(1050, 701050, "am I registered?")
+    )
+    assert "don't see a Medihub patient profile linked" in unlinked.replies[0].text
+    assert unlinked.replies[0].reply_markup is not None
+
+    await register_patient(setup_db, 701051, 1060)
+    linked = await dispatch(
+        setup_db,
+        message(
+            1070,
+            701051,
+            "I want to konw is my registration completer in your portal",
+        ),
+    )
+    assert "registration is complete" in linked.replies[0].text
+    assert "Telegram Patient" in linked.replies[0].text
+
+
+async def test_appointment_approval_question_reports_latest_real_status(
+    setup_db, booking_context
+):
+    user_id = 701052
+    await register_patient(setup_db, user_id, 1200)
+    hospital_id = booking_context["hospital_id"]
+    doctor_id = booking_context["doctor_id"]
+
+    await dispatch(setup_db, callback(1210, user_id, f"book:{hospital_id}:{doctor_id}"))
+    await dispatch(setup_db, message(1211, user_id, date.today().isoformat()))
+    await dispatch(setup_db, callback(1212, user_id, "slot:10:00"))
+    await dispatch(setup_db, message(1213, user_id, "Persistent fever and body pain"))
+    await dispatch(setup_db, message(1214, user_id, "99.5"))
+    await dispatch(setup_db, message(1215, user_id, "fever, bodyache"))
+    await dispatch(setup_db, callback(1216, user_id, "confirm_booking"))
+
+    result = await dispatch(
+        setup_db, message(1217, user_id, "is my request approved?")
+    )
+    reply = result.replies[0].text.casefold()
+    assert "latest appointment request" in reply
+    assert "pending" in reply
+    assert "waiting for the doctor's approval" in reply
+
+    appointment = await setup_db.find_one(
+        AppointmentModel, AppointmentModel.patient_id == str((await setup_db.find_one(
+            UserModel, UserModel.telegram_user_id == str(user_id)
+        )).id)
+    )
+    appointment.status = AppointmentStatus.ACCEPTED
+    await setup_db.save(appointment)
+
+    prescription_result = await dispatch(
+        setup_db,
+        message(
+            1218,
+            user_id,
+            "can you tell me whether the doctor has any prescription for my previous visit",
+        ),
+    )
+    prescription_reply = prescription_result.replies[0].text.casefold()
+    assert "accepted appointment" in prescription_reply
+    assert "hasn't submitted a prescription" in prescription_reply
+    assert "if your visit already happened" in prescription_reply
+
+
 async def test_complete_booking_can_be_done_as_a_natural_conversation(
     setup_db, booking_context
 ):
@@ -378,10 +442,7 @@ async def test_complete_booking_can_be_done_as_a_natural_conversation(
         setup_db,
         message(1110, user_id, "I have had a persistent fever and body pain"),
     )
-    await dispatch(setup_db, message(1111, user_id, "37.5 C"))
-    summary = await dispatch(
-        setup_db, message(1112, user_id, "fever with body pain")
-    )
+    summary = await dispatch(setup_db, message(1111, user_id, "37.5 C"))
     assert "Reply 'yes'" in summary.replies[0].text
     assert "Temperature: 99.5" in summary.replies[0].text
 
@@ -393,3 +454,38 @@ async def test_complete_booking_can_be_done_as_a_natural_conversation(
     assert await setup_db.count(
         AppointmentModel, AppointmentModel.patient_id == str(patient.id)
     ) == 1
+
+
+async def test_booking_accepts_multiple_details_in_one_message(
+    setup_db, booking_context
+):
+    user_id = 701060
+    await register_patient(setup_db, user_id, 1300)
+    hospital_id = booking_context["hospital_id"]
+    doctor_id = booking_context["doctor_id"]
+
+    await dispatch(setup_db, callback(1310, user_id, f"book:{hospital_id}:{doctor_id}"))
+    partial = await dispatch(
+        setup_db, message(1311, user_id, "tomorrow and for 7pm")
+    )
+    partial_text = partial.replies[0].text
+    assert "at 19:00" in partial_text
+    assert "What would you like the doctor to help you with?" in partial_text
+
+    # Start over and provide all required booking details in a single natural sentence.
+    await dispatch(setup_db, message(1312, user_id, "/cancel"))
+    await dispatch(setup_db, callback(1313, user_id, f"book:{hospital_id}:{doctor_id}"))
+    complete = await dispatch(
+        setup_db,
+        message(
+            1314,
+            user_id,
+            "tomorrow at 7 pm for persistent fever and cough, temperature 101 F",
+        ),
+    )
+    summary = complete.replies[0].text
+    assert "Confirm appointment" in summary
+    assert "Time: 19:00" in summary
+    assert "Reason: persistent fever and cough" in summary
+    assert "Temperature: 101.0 °F" in summary
+    assert "Symptoms: fever, cough" in summary

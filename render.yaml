@@ -35,6 +35,12 @@ services:
         value: "false"
       - key: GEMINI_API_KEY
         sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.6-flash
+      - key: GEMINI_FALLBACK_MODEL
+        value: gemini-3.1-flash-lite
+      - key: GEMINI_TIMEOUT_SECONDS
+        value: "10"
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_API_BASE_URL

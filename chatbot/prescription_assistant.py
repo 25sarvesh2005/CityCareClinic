@@ -717,7 +717,7 @@ def _generate_grounded_answer(question: str, sources: str) -> str:
         raise RuntimeError("Missing GEMINI_API_KEY or GOOGLE_API_KEY.")
 
     client = genai.Client(api_key=api_key)
-    model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
     response = client.models.generate_content(
         model=model,
         contents=(
