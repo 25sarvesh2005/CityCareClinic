@@ -26,12 +26,14 @@ MIN_JWT_SECRET_LENGTH = 32
 
 def load_project_env() -> None:
     """
-    Load environment variables from the project root .env file.
+    Load environment variables from backend/.env or repo-root .env.
     Environment variables supplied by hosting providers take precedence (override=False).
     """
     env_file = PROJECT_ROOT / ".env"
     if env_file.exists():
         load_dotenv(dotenv_path=env_file, override=False)
+    elif (PROJECT_ROOT.parent / ".env").exists():
+        load_dotenv(dotenv_path=PROJECT_ROOT.parent / ".env", override=False)
 
 
 # Auto-load on import so modules reading os.getenv get project-root .env values

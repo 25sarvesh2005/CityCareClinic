@@ -15,8 +15,8 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-FRONTEND_SRC = PROJECT_ROOT / "indigo-glow-app-main" / "src"
-FRONTEND_OUTPUT = PROJECT_ROOT / "indigo-glow-app-main" / ".output" / "public"
+FRONTEND_SRC = PROJECT_ROOT / "frontend" / "src"
+FRONTEND_OUTPUT = PROJECT_ROOT / "frontend" / ".output" / "public"
 
 FORBIDDEN_KEYWORD_PATTERNS = [
     re.compile(r"JWT_SECRET\s*=", re.IGNORECASE),
@@ -38,7 +38,7 @@ def audit_file(filepath: Path) -> list[str]:
     violations: list[str] = []
     try:
         content = filepath.read_text(encoding="utf-8", errors="ignore")
-    except Exception as exc:
+    except OSError as exc:
         violations.append(f"Failed to read {filepath}: {exc}")
         return violations
 

@@ -6,13 +6,16 @@ import asyncio
 import sys
 from pathlib import Path
 
-# Ensure project root is in sys.path
+# Ensure backend directory and project root are in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+BACKEND_DIR = PROJECT_ROOT / "backend"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from motor.motor_asyncio import AsyncIOMotorClient
 from common.config import get_db_name, get_mongo_url
+from motor.motor_asyncio import AsyncIOMotorClient
 
 
 async def run_migration():

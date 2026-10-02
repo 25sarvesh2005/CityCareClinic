@@ -9,7 +9,6 @@ import sys
 import httpx
 from dotenv import load_dotenv
 
-
 COMMANDS = [
     {"command": "start", "description": "Open the patient assistant"},
     {"command": "help", "description": "Show commands and safety guidance"},

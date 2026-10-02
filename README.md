@@ -57,48 +57,29 @@ Standard operating procedures and disaster recovery guidelines are documented in
 
 ```
 CITYCARE_CLINIC/
-├── main.py                          # Application entry point, lifespan, CORS, and health probes
-├── common/                          # Cross-cutting foundational modules
-│   ├── auth.py                      # JWT verification, password hashing, and role dependencies
-│   ├── config.py                    # Environment variable management and production validation gates
-│   ├── logger.py                    # Structured logging configuration
-│   └── tenant_scope.py              # Multi-tenant context extraction and boundary enforcement
-├── core/                            # Core hospital and clinic business domains
-│   ├── apis/                        # API route aggregation and Pydantic validation schemas
-│   ├── constants.py                 # Central single source of truth for enums and clinic constants
-│   ├── controllers/                 # Business logic orchestration and booking validation gates
-│   ├── cruds/                       # Low-level asynchronous MongoDB operations via ODMantic
-│   ├── database/                    # Motor MongoDB connection lifecycle and seeding logic
-│   ├── models/                      # ODMantic Document models
-│   └── services/                    # Cloudinary media uploads and ReportLab PDF compilation
-├── chatbot/                         # AI Schedule Assistant and clinical conversational engine
-│   ├── gemini_client.py             # Google GenAI SDK wrapper with multi-turn tool calling
-│   ├── prescription_assistant.py    # Structured clinical extraction and drug interaction assistant
-│   ├── rag_service.py               # ChromaDB vector store integration with patient handbook embeddings
-│   ├── routes/                      # REST endpoints for interactive schedule and prescription chat
-│   └── tools.py                     # Execution engine for Gemini function calling tools
-├── telegram_bot/                    # Telegram messaging gateway and patient workflow state machine
-│   ├── client.py                    # Asynchronous Telegram Bot API client
-│   ├── conversation.py              # Natural language parsing and intent classification
-│   ├── gateway.py                   # Central dispatcher, state machine transitions, and deduplication
-│   ├── medical_assistant.py         # Conversational intake with emergency escalation guards
-│   ├── patient_service.py           # Service bridging Telegram requests to core clinic operations
-│   └── routes.py                    # Webhook endpoint and one-time account linking code generation
-├── mcp_server/                      # FastMCP server exposing clinic operations to AI agents
-│   ├── server.py                    # FastMCP app configuration and Streamable HTTP endpoint
-│   └── tools/                       # MCP tools (appointments, discovery, prescriptions) and auth bridge
-├── cli/                             # Command-line interface utilities
-│   ├── commands/                    # Interactive commands (e.g. terminal prescription chat)
-│   └── main.py                      # CLI entry point
-├── indigo-glow-app-main/            # Modern React 19 + TypeScript + TanStack Start frontend
+├── backend/                         # Production Python FastAPI, AI assistants, and MCP server
+│   ├── main.py                      # Application entry point, lifespan, CORS, and health probes
+│   ├── common/                      # Cross-cutting foundational modules (auth, config, logger, tenant)
+│   ├── core/                        # Core hospital and clinic business domains (apis, controllers, models, cruds)
+│   ├── chatbot/                     # AI Schedule Assistant and clinical RAG conversational engine
+│   ├── telegram_bot/                # Telegram messaging gateway and patient workflow state machine
+│   ├── mcp_server/                  # FastMCP server exposing clinic operations to AI agents
+│   ├── cli/                         # Command-line interface utilities
+│   ├── data/                        # Static clinical references and vector embeddings
+│   │   └── handbook/                # CityCare Clinic Patient Handbook PDF source
+│   ├── tests/                       # Comprehensive test suite (133 unit, integration, and security tests)
+│   ├── pyproject.toml               # Python project configuration, ruff linter, and pytest settings
+│   ├── requirements.txt             # Production dependencies
+│   └── requirements-dev.txt         # Development and testing dependencies
+├── frontend/                        # Modern React 19 + TypeScript + TanStack Start frontend
 │   ├── src/                         # Application components, routes, hooks, and API client
 │   ├── public/                      # Static web assets and icons
-│   └── package.json                 # Frontend dependencies and build scripts
+│   ├── package.json                 # Frontend dependencies and build scripts
+│   └── vite.config.ts               # Vite bundler configuration
 ├── docs/                            # Architectural documentation and operational runbooks
 │   ├── ARCHITECTURE.md              # Authoritative system architecture document
 │   └── runbooks/                    # Operations and disaster recovery runbooks
-├── scripts/                         # Operational management scripts (webhooks, migrations, secret audits)
-└── tests/                           # Comprehensive test suite (130+ unit, integration, and security tests)
+└── scripts/                         # Operational management scripts (webhooks, migrations, secret audits)
 ```
 
 ---
@@ -119,12 +100,13 @@ python -m venv .venv
 source .venv/bin/activate  # On Windows: .\.venv\Scripts\Activate.ps1
 
 # Install development dependencies
-pip install -r requirements-dev.txt
+pip install -r backend/requirements-dev.txt
 
 # Configure environment variables
-cp .env.example .env
+cp backend/.env.example backend/.env
 
 # Start FastAPI development server
+cd backend
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -133,7 +115,7 @@ Verify backend health at `http://localhost:8000/` or visit interactive documenta
 ### 2. Frontend Setup
 
 ```bash
-cd indigo-glow-app-main
+cd frontend
 
 # Install dependencies
 npm ci
@@ -148,6 +130,7 @@ Access the web application at `http://localhost:5173`.
 
 ```bash
 # Start MCP server over Streamable HTTP on port 8001
+cd backend
 python -m uvicorn mcp_server.server:app --host 127.0.0.1 --port 8001
 ```
 
@@ -161,29 +144,29 @@ Run all verification suites locally before committing changes:
 
 ```bash
 # 1. Bytecode syntax & compilation verification
-python -m compileall -q core common chatbot telegram_bot mcp_server cli scripts tests main.py
+python -m compileall -q backend scripts
 
 # 2. Backend import sanity verification
-python -c "import main; print('Backend import OK')"
-python -c "import mcp_server.server; print('MCP import OK')"
+cd backend && python -c "import main; print('Backend import OK')"
+cd backend && python -c "import mcp_server.server; print('MCP import OK')"
 
 # 3. Backend linting check
-ruff check core common chatbot telegram_bot mcp_server cli scripts tests main.py
+ruff check backend scripts
 
 # 4. Run comprehensive backend test suite
-pytest -q
+cd backend && pytest -q
 
 # 5. Client secret leak audit
 python scripts/audit_client_secrets.py
 
 # 6. Frontend TypeScript typecheck
-cd indigo-glow-app-main && npx tsc --noEmit
+cd frontend && npx tsc --noEmit
 
 # 7. Frontend ESLint validation
-npm run lint
+cd frontend && npm run lint
 
 # 8. Frontend production bundle build
-npm run build
+cd frontend && npm run build
 ```
 
 ---

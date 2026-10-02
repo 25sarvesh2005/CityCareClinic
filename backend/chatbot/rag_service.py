@@ -12,10 +12,14 @@ from common.logger import get_logger
 logger = get_logger(__name__)
 
 # Constants
-DEFAULT_PDF_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "RAG",
-    "CityCare-Clinic-Patient-Handbook.pdf",
+DEFAULT_PDF_PATH = os.getenv(
+    "PATIENT_HANDBOOK_PATH",
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "data",
+        "handbook",
+        "CityCare-Clinic-Patient-Handbook.pdf",
+    ),
 )
 def get_chroma_persist_dir() -> str:
     override = os.getenv("CHROMA_PERSIST_DIR")

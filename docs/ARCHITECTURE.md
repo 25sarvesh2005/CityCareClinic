@@ -23,51 +23,57 @@ The codebase enforces a unidirectional dependency hierarchy: `Routes → Control
 
 ```
 CITYCARE_CLINIC/
-├── main.py                          # ASGI application factory, lifespan lifecycle, middleware, and health probes
-├── common/                          # Cross-cutting foundational utilities (auth, configuration, logging, tenant scoping)
-│   ├── auth.py                      # JWT verification, password hashing, and role-based access dependencies
-│   ├── config.py                    # Environment variable parsing, validation gates, and CORS normalization
-│   ├── logger.py                    # Structured logging configuration with rotation-safe handlers
-│   └── tenant_scope.py              # Tenant context extraction and cross-tenant boundary verification
-├── core/                            # Core hospital and clinic business domains
-│   ├── apis/
-│   │   ├── api.py                   # Aggregated API router declaring OpenAPI v1 boundaries
-│   │   ├── routes/                  # HTTP route endpoints (admin, appointment, auth, doctor, hospital, prescription)
-│   │   └── schemas/                 # Pydantic v2 schemas for request validation and response serialization
-│   ├── constants.py                 # Centralized system constants, user roles, appointment statuses, and clinic slots
-│   ├── controllers/                 # Domain logic orchestration, validation gates, and transaction workflows
-│   ├── cruds/                       # Low-level asynchronous MongoDB database operations via ODMantic
-│   ├── database/                    # Motor MongoDB connection management, index creation, and initial seeding
-│   ├── models/                      # ODMantic Document models defining MongoDB collections and schemas
-│   └── services/                    # Cloudinary media uploads and ReportLab PDF prescription generation
-├── chatbot/                         # AI Schedule Assistant and clinical conversational engine
-│   ├── controllers/                 # Chat session lifecycle and message coordination
-│   ├── cruds/                       # MongoDB persistence for chat sessions and message histories
-│   ├── gemini_client.py             # Google GenAI SDK wrapper with multi-turn tool calling and model fallback
-│   ├── models/                      # Chat session and message ODMantic document models
-│   ├── prescription_assistant.py    # Structured clinical extraction and drug interaction assistant
-│   ├── rag_service.py               # ChromaDB vector store integration with patient handbook embeddings
-│   ├── routes/                      # REST endpoints for interactive schedule and prescription chat
-│   ├── schemas/                     # Validation schemas for conversational requests and tool invocations
-│   └── tools.py                     # Execution engine for Gemini function calling tools
-├── telegram_bot/                    # Telegram messaging gateway and stateful patient workflow engine
-│   ├── client.py                    # Asynchronous Telegram Bot API HTTP client
-│   ├── conversation.py              # Natural language parsing, date extraction, and intent classification
-│   ├── cruds.py                     # Telegram user session, update deduplication, and link code persistence
-│   ├── gateway.py                   # Central dispatcher, state machine transitions, and error handlers
-│   ├── medical_assistant.py         # Conversational clinical intake with emergency escalation guards
-│   ├── models.py                    # Persistence models for Telegram sessions, updates, and one-time link codes
-│   ├── patient_service.py           # Bridging service invoking core appointment and prescription operations
-│   ├── polling.py                   # Local-development long-polling runner
-│   ├── routes.py                    # Webhook endpoint receiving Telegram updates and one-time link code generation
-│   └── schemas.py                   # Pydantic models for incoming Telegram payloads
-├── mcp_server/                      # FastMCP server exposing clinic operations to AI agents
-│   ├── server.py                    # FastMCP app configuration, Streamable HTTP and stdio transport runners
-│   └── tools/                       # MCP tools (appointments, doctor discovery, prescriptions) and auth bridge
-├── cli/                             # Command-line interface utilities
-│   ├── commands/                    # Interactive commands (e.g. terminal prescription consultation)
-│   └── main.py                      # CLI entry point parsing command arguments
-├── indigo-glow-app-main/            # Production Single-Page / SSR web frontend
+├── backend/                         # Production Python FastAPI, AI assistants, and MCP server
+│   ├── main.py                      # ASGI application factory, lifespan lifecycle, middleware, and health probes
+│   ├── common/                      # Cross-cutting foundational utilities (auth, configuration, logging, tenant scoping)
+│   │   ├── auth.py                  # JWT verification, password hashing, and role-based access dependencies
+│   │   ├── config.py                # Environment variable parsing, validation gates, and CORS normalization
+│   │   ├── logger.py                # Structured logging configuration with rotation-safe handlers
+│   │   └── tenant_scope.py          # Tenant context extraction and cross-tenant boundary verification
+│   ├── core/                        # Core hospital and clinic business domains
+│   │   ├── apis/
+│   │   │   ├── api.py               # Aggregated API router declaring OpenAPI v1 boundaries
+│   │   │   ├── routes/              # HTTP route endpoints (admin, appointment, auth, doctor, hospital, prescription)
+│   │   │   └── schemas/             # Pydantic v2 schemas for request validation and response serialization
+│   │   ├── constants.py             # Centralized system constants, user roles, appointment statuses, and clinic slots
+│   │   ├── controllers/             # Domain logic orchestration, validation gates, and transaction workflows
+│   │   ├── cruds/                   # Low-level asynchronous MongoDB database operations via ODMantic
+│   │   ├── database/                # Motor MongoDB connection management, index creation, and initial seeding
+│   │   ├── models/                  # ODMantic Document models defining MongoDB collections and schemas
+│   │   └── services/                # Cloudinary media uploads and ReportLab PDF prescription generation
+│   ├── chatbot/                     # AI Schedule Assistant and clinical conversational engine
+│   │   ├── controllers/             # Chat session lifecycle and message coordination
+│   │   ├── cruds/                   # MongoDB persistence for chat sessions and message histories
+│   │   ├── gemini_client.py         # Google GenAI SDK wrapper with multi-turn tool calling and model fallback
+│   │   ├── models/                  # Chat session and message ODMantic document models
+│   │   ├── prescription_assistant.py# Structured clinical extraction and drug interaction assistant
+│   │   ├── rag_service.py           # ChromaDB vector store integration with patient handbook embeddings
+│   │   ├── routes/                  # REST endpoints for interactive schedule and prescription chat
+│   │   ├── schemas/                 # Validation schemas for conversational requests and tool invocations
+│   │   └── tools.py                 # Execution engine for Gemini function calling tools
+│   ├── telegram_bot/                # Telegram messaging gateway and stateful patient workflow engine
+│   │   ├── client.py                # Asynchronous Telegram Bot API HTTP client
+│   │   ├── conversation.py          # Natural language parsing, date extraction, and intent classification
+│   │   ├── cruds.py                 # Telegram user session, update deduplication, and link code persistence
+│   │   ├── gateway.py               # Central dispatcher, state machine transitions, and error handlers
+│   │   ├── medical_assistant.py     # Conversational clinical intake with emergency escalation guards
+│   │   ├── models.py                # Persistence models for Telegram sessions, updates, and one-time link codes
+│   │   ├── patient_service.py       # Bridging service invoking core appointment and prescription operations
+│   │   ├── polling.py               # Local-development long-polling runner
+│   │   ├── routes.py                # Webhook endpoint receiving Telegram updates and one-time link code generation
+│   │   └── schemas.py               # Pydantic models for incoming Telegram payloads
+│   ├── mcp_server/                  # FastMCP server exposing clinic operations to AI agents
+│   │   ├── server.py                # FastMCP app configuration, Streamable HTTP and stdio transport runners
+│   │   └── tools/                   # MCP tools (appointments, doctor discovery, prescriptions) and auth bridge
+│   ├── cli/                         # Command-line interface utilities
+│   │   ├── commands/                # Interactive commands (e.g. terminal prescription consultation)
+│   │   └── main.py                  # CLI entry point parsing command arguments
+│   ├── data/                        # Static clinical reference documents and local ChromaDB stores
+│   │   └── handbook/                # CityCare Clinic Patient Handbook PDF source
+│   ├── tests/                       # Comprehensive test suite (unit, integration, security, and concurrency)
+│   ├── pyproject.toml               # Python project configuration, ruff linter, and pytest settings
+│   └── requirements.txt             # Production dependencies
+├── frontend/                        # Production Single-Page / SSR web frontend
 │   ├── src/                         # React components, routes, hooks, and API client layer
 │   ├── public/                      # Static assets, icons, and robots.txt
 │   ├── package.json                 # Node dependencies and build scripts
@@ -75,16 +81,15 @@ CITYCARE_CLINIC/
 ├── docs/                            # Production architectural specifications and operational runbooks
 │   ├── ARCHITECTURE.md              # Authoritative system architecture document (this file)
 │   └── runbooks/                    # Detailed operational runbooks (Telegram gateway, MCP, disaster recovery)
-├── scripts/                         # Operational management scripts (webhook setup, migrations, document ingestion)
-└── tests/                           # Comprehensive test suite (unit, integration, security, and concurrency)
+└── scripts/                         # Operational management scripts (webhook setup, migrations, document ingestion)
 ```
 
 ### Layer Responsibilities
 
-- **Routes (`core/apis/routes/`, `chatbot/routes/`, `telegram_bot/routes.py`)**: Accept HTTP/Webhook requests, validate input headers and schemas, authenticate credentials via dependencies, and delegate immediately to controllers.
-- **Controllers (`core/controllers/`, `chatbot/controllers/`, `telegram_bot/gateway.py`)**: Enforce business rules, verify domain invariants (e.g., slot collisions, temperature bounds), coordinate side-effects (e.g., PDF generation, Cloudinary sync), and assemble response structures.
-- **CRUD & Persistence (`core/cruds/`, `chatbot/cruds/`, `telegram_bot/cruds.py`)**: Perform atomic queries and mutations against MongoDB using ODMantic document models. Contain zero HTTP-specific logic.
-- **Database (`core/database/database.py`)**: Manages the life-cycle of the `AsyncIOMotorClient` and `AIOEngine`, connection pooling, health checks, and shutdown flushes.
+- **Routes (`backend/core/apis/routes/`, `backend/chatbot/routes/`, `backend/telegram_bot/routes.py`)**: Accept HTTP/Webhook requests, validate input headers and schemas, authenticate credentials via dependencies, and delegate immediately to controllers.
+- **Controllers (`backend/core/controllers/`, `backend/chatbot/controllers/`, `backend/telegram_bot/gateway.py`)**: Enforce business rules, verify domain invariants (e.g., slot collisions, temperature bounds), coordinate side-effects (e.g., PDF generation, Cloudinary sync), and assemble response structures.
+- **CRUD & Persistence (`backend/core/cruds/`, `backend/chatbot/cruds/`, `backend/telegram_bot/cruds.py`)**: Perform atomic queries and mutations against MongoDB using ODMantic document models. Contain zero HTTP-specific logic.
+- **Database (`backend/core/database/database.py`)**: Manages the life-cycle of the `AsyncIOMotorClient` and `AIOEngine`, connection pooling, health checks, and shutdown flushes.
 
 ---
 

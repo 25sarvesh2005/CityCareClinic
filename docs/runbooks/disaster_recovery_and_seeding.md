@@ -47,7 +47,7 @@ The clinical RAG assistant references a persistent ChromaDB vector store populat
 To re-index or update handbook documents:
 
 ```bash
-python scripts/ingest_docs.py --pdf-path RAG/CityCare-Clinic-Patient-Handbook.pdf
+python scripts/ingest_docs.py --pdf-path backend/data/handbook/CityCare-Clinic-Patient-Handbook.pdf
 ```
 
 The script chunks text, generates vector embeddings, and stores them in `data/chroma_db/`.

@@ -5,19 +5,24 @@ Usage:
     python scripts/ingest_docs.py [--pdf-path path/to/file.pdf]
 """
 
-import sys
-import os
 import argparse
+import os
+import sys
 
-# Add project root to python path
+# Add project root and backend to python path
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from dotenv import load_dotenv
-load_dotenv()
 
-from chatbot.rag_service import ingest_pdf, DEFAULT_PDF_PATH
+load_dotenv(os.path.join(BACKEND_DIR, ".env"))
+load_dotenv(os.path.join(ROOT_DIR, ".env"))
+
+from chatbot.rag_service import DEFAULT_PDF_PATH, ingest_pdf
 from common.logger import get_logger
 
 logger = get_logger("ingest_docs")
@@ -47,7 +52,7 @@ def main():
         print(f"[Success] Ingestion Complete! Indexed {count} document chunks into RAG vector store.")
     except Exception as err:
         print(f"[Error] Ingestion Failed: {err}")
-        logger.error("Failed to ingest document", exc_info=True)
+        logger.exception("Failed to ingest document")
         sys.exit(1)
 
 

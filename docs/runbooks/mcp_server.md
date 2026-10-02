@@ -46,11 +46,13 @@ The server supports two standard transports:
 
 Start the CityCare backend in one terminal:
 ```bash
+cd backend
 python -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
 Start the MCP server in a separate terminal:
 ```bash
+cd backend
 python -m uvicorn mcp_server.server:app --host 127.0.0.1 --port 8001
 ```
 
@@ -61,11 +63,13 @@ The Streamable HTTP endpoint is available at:
 
 Inspect tools, schemas, resources, and prompts interactively:
 ```bash
+cd backend
 fastmcp dev mcp_server/server.py --ui-port 6274 --server-port 6277
 ```
 
 Non-interactive schema validation:
 ```bash
+cd backend
 fastmcp inspect mcp_server/server.py --format mcp
 ```
 

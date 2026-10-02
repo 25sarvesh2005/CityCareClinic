@@ -9,3 +9,7 @@ ignore = [
     "E402",  # module import order when loading env or configuring sys.path
     "E712",  # boolean equality comparisons in ODMantic query expressions
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "strict"

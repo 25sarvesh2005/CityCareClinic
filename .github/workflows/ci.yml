@@ -19,6 +19,9 @@ jobs:
     name: Backend Quality & Tests
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: backend
 
     services:
       mongodb:
@@ -58,13 +61,13 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: requirements-dev.txt
+          cache-dependency-path: backend/requirements-dev.txt
 
       - name: Install backend dependencies
         run: python -m pip install -r requirements-dev.txt
 
       - name: Verify bytecode compilation
-        run: python -m compileall -q core common chatbot telegram_bot mcp_server cli scripts tests main.py
+        run: python -m compileall -q core common chatbot telegram_bot mcp_server cli tests main.py
 
       - name: Verify backend imports
         run: |
@@ -72,7 +75,7 @@ jobs:
           python -c "import mcp_server.server; print('MCP server import OK')"
 
       - name: Run Ruff linter
-        run: ruff check core common chatbot telegram_bot mcp_server cli scripts tests main.py
+        run: ruff check core common chatbot telegram_bot mcp_server cli tests main.py
 
       - name: Run backend test suite
         run: python -m pytest -q
@@ -86,7 +89,7 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: indigo-glow-app-main
+        working-directory: frontend
 
     steps:
       - name: Check out repository
@@ -97,7 +100,7 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: indigo-glow-app-main/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Set up Python for audit scripts
         uses: actions/setup-python@v5
