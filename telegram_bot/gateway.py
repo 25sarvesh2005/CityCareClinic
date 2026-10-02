@@ -1,4 +1,4 @@
-"""Hermes-inspired Telegram message gateway and patient workflow state machine."""
+"""Telegram message gateway and patient workflow state machine."""
 
 import asyncio
 import hashlib

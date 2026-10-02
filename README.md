@@ -1,109 +1,193 @@
-# CityCare MCP Day 7
+# CityCare Clinic — Multi-Tenant Healthcare Consultation Platform
 
-## Telegram patient assistant
+[![CI](https://github.com/25sarvesh2005/CityCareClinic/actions/workflows/ci.yml/badge.svg)](https://github.com/25sarvesh2005/CityCareClinic/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.13-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 
-The project now includes a patient-only Telegram gateway for symptom chat, hospital facilities, doctor discovery, specialization search, appointment booking, registration/account linking, appointments, and prescriptions. Existing web behavior remains unchanged. See [TELEGRAM_GATEWAY.md](TELEGRAM_GATEWAY.md) for architecture, security decisions, BotFather setup, webhook configuration, and local polling.
+CityCare Clinic is a production-grade, multi-tenant healthcare appointment booking, doctor rostering, and clinical consultation management platform. It orchestrates end-to-end clinical operations across four synchronized client surfaces: a modern React web application, a Model Context Protocol (MCP) server, an omnichannel Telegram patient gateway, and an interactive clinical CLI.
 
-CityCare exposes its existing appointment API through an MCP server in `mcp_server/server.py`. The server reuses the API as the source of truth: it does not recreate appointment dates, capacity rules, duplicate-booking checks, or patient identity in MCP.
+> [!IMPORTANT]
+> **Production Architecture Specification**: For complete system invariants, layer dependencies, entity-relationship diagrams, and security boundaries, refer to the authoritative [Architecture Specification](docs/ARCHITECTURE.md).
 
-## What the server exposes
+---
 
-| MCP capability | Name | Purpose |
-| --- | --- | --- |
-| Tool | `get_available_slots` | Retrieves real, doctor-specific availability from CityCare's Day-4 API. |
-| Tool | `book_appointment` | Creates an appointment for the patient represented by the verified CityCare JWT. |
-| Resource | `citycare://appointment-booking-policy` | Safe ordering and confirmation rules for appointment booking. |
-| Prompt | `book_appointment_safely` | A reusable model instruction for availability-first, confirmation-required booking. |
+## Key System Capabilities
 
-The existing prescription, patient-appointment, and doctor-schedule MCP tools remain available.
+- **Strict Multi-Tenant Isolation**: Hospital-scoped data boundaries guarantee complete logical separation across doctors, schedules, bookings, and clinical prescriptions.
+- **Defensive Appointment Booking Engine**: Enforces four synchronous validation gates (7-day advance booking window, doctor schedule verification, 12 fixed clinic slot menus, and atomic duplicate-booking prevention).
+- **Digital Clinical Prescriptions**: Automated medical prescription generation compiling structured dosage schedules into tamper-evident PDF documents with optional Cloudinary CDN distribution.
+- **Dual AI Clinical Assistants**:
+  - *Schedule Assistant*: Multi-turn natural language conversational agent executing function-calling tools against real-time clinic schedules with model fallback (`gemini-3.6-flash` → `gemini-3.1-flash-lite`).
+  - *Prescription Assistant*: Retrieval-Augmented Generation (RAG) assistant leveraging ChromaDB vector embeddings of clinic patient handbooks for drug interaction and clinical guideline verification.
+- **Omnichannel Client Interfaces**:
+  - **Web Client**: High-performance React 19 Single-Page / SSR application built with TanStack Start, TanStack Router, Radix UI, and TailwindCSS.
+  - **FastMCP Server**: Anthropic Model Context Protocol server exposing clinic operations, resources, and confirmation prompts to AI agents under patient JWT authorization.
+  - **Telegram Patient Gateway**: Resilient conversational bot supporting symptom intake, doctor discovery, guided scheduling, and secure one-time account linking.
+  - **Clinical CLI**: Terminal application for healthcare staff consultation and instant prescription generation.
 
-## Run the Inspector
+---
 
-From the project root:
+## Interactive API Documentation
 
-```powershell
-.\.venv\Scripts\fastmcp.exe dev mcp_server\server.py --ui-port 6274 --server-port 6277
+When the FastAPI backend is running, live interactive OpenAPI documentation is immediately accessible at:
+
+| Documentation Surface | URL | Description |
+|---|---|---|
+| **Swagger UI** | `http://localhost:8000/docs` | Interactive API explorer with inline Bearer token authorization |
+| **ReDoc** | `http://localhost:8000/redoc` | Comprehensive, structured API reference documentation |
+| **OpenAPI Schema** | `http://localhost:8000/openapi.json` | Raw OpenAPI 3.1 JSON specification |
+| **Liveness Probe** | `http://localhost:8000/health/liveness` | Kubernetes/service liveness health check |
+| **Readiness Probe** | `http://localhost:8000/health/readiness` | Bounded MongoDB ping readiness verification |
+
+---
+
+## Operational Runbooks
+
+Standard operating procedures and disaster recovery guidelines are documented in [`docs/runbooks/`](docs/runbooks/):
+
+- 📖 [Telegram Patient Gateway Runbook](docs/runbooks/telegram_gateway.md) — Webhook configuration, update deduplication, delivery recovery, and session lifecycle.
+- 📖 [Model Context Protocol (MCP) Server Runbook](docs/runbooks/mcp_server.md) — FastMCP setup, Streamable HTTP vs stdio transports, tool schemas, and patient authorization bridge.
+- 📖 [Disaster Recovery & Environment Governance](docs/runbooks/disaster_recovery_and_seeding.md) — Production configuration validation gates, database migrations, backup/restore procedures, and seeding policies.
+
+---
+
+## Repository Structure
+
+```
+CITYCARE_CLINIC/
+├── main.py                          # Application entry point, lifespan, CORS, and health probes
+├── common/                          # Cross-cutting foundational modules
+│   ├── auth.py                      # JWT verification, password hashing, and role dependencies
+│   ├── config.py                    # Environment variable management and production validation gates
+│   ├── logger.py                    # Structured logging configuration
+│   └── tenant_scope.py              # Multi-tenant context extraction and boundary enforcement
+├── core/                            # Core hospital and clinic business domains
+│   ├── apis/                        # API route aggregation and Pydantic validation schemas
+│   ├── constants.py                 # Central single source of truth for enums and clinic constants
+│   ├── controllers/                 # Business logic orchestration and booking validation gates
+│   ├── cruds/                       # Low-level asynchronous MongoDB operations via ODMantic
+│   ├── database/                    # Motor MongoDB connection lifecycle and seeding logic
+│   ├── models/                      # ODMantic Document models
+│   └── services/                    # Cloudinary media uploads and ReportLab PDF compilation
+├── chatbot/                         # AI Schedule Assistant and clinical conversational engine
+│   ├── gemini_client.py             # Google GenAI SDK wrapper with multi-turn tool calling
+│   ├── prescription_assistant.py    # Structured clinical extraction and drug interaction assistant
+│   ├── rag_service.py               # ChromaDB vector store integration with patient handbook embeddings
+│   ├── routes/                      # REST endpoints for interactive schedule and prescription chat
+│   └── tools.py                     # Execution engine for Gemini function calling tools
+├── telegram_bot/                    # Telegram messaging gateway and patient workflow state machine
+│   ├── client.py                    # Asynchronous Telegram Bot API client
+│   ├── conversation.py              # Natural language parsing and intent classification
+│   ├── gateway.py                   # Central dispatcher, state machine transitions, and deduplication
+│   ├── medical_assistant.py         # Conversational intake with emergency escalation guards
+│   ├── patient_service.py           # Service bridging Telegram requests to core clinic operations
+│   └── routes.py                    # Webhook endpoint and one-time account linking code generation
+├── mcp_server/                      # FastMCP server exposing clinic operations to AI agents
+│   ├── server.py                    # FastMCP app configuration and Streamable HTTP endpoint
+│   └── tools/                       # MCP tools (appointments, discovery, prescriptions) and auth bridge
+├── cli/                             # Command-line interface utilities
+│   ├── commands/                    # Interactive commands (e.g. terminal prescription chat)
+│   └── main.py                      # CLI entry point
+├── indigo-glow-app-main/            # Modern React 19 + TypeScript + TanStack Start frontend
+│   ├── src/                         # Application components, routes, hooks, and API client
+│   ├── public/                      # Static web assets and icons
+│   └── package.json                 # Frontend dependencies and build scripts
+├── docs/                            # Architectural documentation and operational runbooks
+│   ├── ARCHITECTURE.md              # Authoritative system architecture document
+│   └── runbooks/                    # Operations and disaster recovery runbooks
+├── scripts/                         # Operational management scripts (webhooks, migrations, secret audits)
+└── tests/                           # Comprehensive test suite (130+ unit, integration, and security tests)
 ```
 
-Open the Inspector URL printed by FastMCP. It should list tools, one resource, and one prompt. The non-interactive equivalent is:
+---
 
-```powershell
-.\.venv\Scripts\fastmcp.exe inspect mcp_server\server.py --format mcp
+## Getting Started
+
+### Prerequisites
+
+- **Python**: Version 3.13+
+- **Node.js**: Version 20+ LTS
+- **Database**: MongoDB 7.0+ (running locally on port 27017 or remote connection string)
+
+### 1. Backend Setup
+
+```bash
+# Create and activate Python virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .\.venv\Scripts\Activate.ps1
+
+# Install development dependencies
+pip install -r requirements-dev.txt
+
+# Configure environment variables
+cp .env.example .env
+
+# Start FastAPI development server
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-## Run CityCare and the MCP HTTP server
+Verify backend health at `http://localhost:8000/` or visit interactive documentation at `http://localhost:8000/docs`.
 
-Start CityCare's API in one terminal:
+### 2. Frontend Setup
 
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000
+```bash
+cd indigo-glow-app-main
+
+# Install dependencies
+npm ci
+
+# Start frontend development server
+npm run dev
 ```
 
-Start the MCP server under Uvicorn in another terminal:
+Access the web application at `http://localhost:5173`.
 
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn mcp_server.server:app --host 127.0.0.1 --port 8001
+### 3. Model Context Protocol (MCP) Server
+
+```bash
+# Start MCP server over Streamable HTTP on port 8001
+python -m uvicorn mcp_server.server:app --host 127.0.0.1 --port 8001
 ```
 
-The Streamable HTTP MCP endpoint is `http://127.0.0.1:8001/mcp`.
+The Streamable HTTP MCP endpoint is accessible at `http://127.0.0.1:8001/mcp`.
 
-`CITYCARE_API_BASE_URL` is optional and defaults to `http://127.0.0.1:8000`. Set it only when CityCare runs at a different origin.
+---
 
-### Transport swap
+## Verification & Testing Loop
 
-Changing from `stdio` to Streamable HTTP changes only how the client connects: a local process stream becomes the `/mcp` HTTP endpoint served by Uvicorn. The tools, resource, prompt, schemas, JWT checks, and CityCare booking API remain the same.
+Run all verification suites locally before committing changes:
 
-## Codex (local development)
+```bash
+# 1. Bytecode syntax & compilation verification
+python -m compileall -q core common chatbot telegram_bot mcp_server cli scripts tests main.py
 
-Codex Desktop, the Codex CLI, and the Codex IDE extension share the MCP configuration in `%USERPROFILE%\.codex\config.toml`. Start CityCare's API on port 8000, log in as a **patient** at `POST /api/v1/login`, then add the following server section to that file. Preserve your existing configuration and use a short-lived patient JWT only for local development.
+# 2. Backend import sanity verification
+python -c "import main; print('Backend import OK')"
+python -c "import mcp_server.server; print('MCP import OK')"
 
-```toml
-[mcp_servers.citycare_clinic]
-command = "C:\\Games\\FOLDER PRACTICE\\CITYCARE_CLINIC\\.venv\\Scripts\\fastmcp.exe"
-args = [
-  "run",
-  "C:\\Games\\FOLDER PRACTICE\\CITYCARE_CLINIC\\mcp_server\\server.py:mcp",
-  "--transport",
-  "stdio"
-]
-cwd = "C:\\Games\\FOLDER PRACTICE\\CITYCARE_CLINIC"
-startup_timeout_sec = 20
-tool_timeout_sec = 60
-default_tools_approval_mode = "prompt"
+# 3. Backend linting check
+ruff check core common chatbot telegram_bot mcp_server cli scripts tests main.py
 
-[mcp_servers.citycare_clinic.env]
-CITYCARE_API_BASE_URL = "http://127.0.0.1:8000"
-CITYCARE_MCP_JWT = "PASTE_A_SHORT_LIVED_PATIENT_JWT_HERE"
+# 4. Run comprehensive backend test suite
+pytest -q
+
+# 5. Client secret leak audit
+python scripts/audit_client_secrets.py
+
+# 6. Frontend TypeScript typecheck
+cd indigo-glow-app-main && npx tsc --noEmit
+
+# 7. Frontend ESLint validation
+npm run lint
+
+# 8. Frontend production bundle build
+npm run build
 ```
 
-Restart Codex, then type `/mcp` to confirm **citycare_clinic** is connected. Ask: "Find real slots for this doctor tomorrow, then book the 10:00 slot only after I confirm." The model should first select `get_available_slots`, then call `book_appointment` only after explicit confirmation.
+---
 
-The wording that steers correct tool selection is intentional:
+## License
 
-- Availability tool: “**Get real slots ... before proposing or booking**.”
-- Booking tool: “**Exact available slot returned by get_available_slots and explicitly confirmed**.”
-- Booking identity: “**never from tool arguments**.”
-
-`CITYCARE_MCP_JWT` is only a local-stdio development bridge. Do not expose it in a public deployment, source control, screenshots, or logs.
-
-## Proof of persistence
-
-`tests/test_mcp_day7.py` invokes the registered `book_appointment` MCP handler, forwards the patient JWT to the Day-4 `/api/v1/book` endpoint, and then queries MongoDB for the returned appointment ID. It proves that the appointment created through MCP is persisted, while the test database is isolated and cleaned afterwards.
-
-Run it with:
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest tests\test_mcp_day7.py -q
-```
-
-## Security review — `book_appointment`
-
-| Manipulated-model misuse | Guard | Chapter 7 safety mapping |
-| --- | --- | --- |
-| Supplies another patient's ID or name to book on their behalf. | The tool accepts neither field. CityCare derives patient identity from a validated bearer JWT and the MCP tool rejects non-patient roles. | Authorization and least privilege. |
-| Books a guessed slot, repeats bookings, or acts before the patient agrees. | The tool description and prompt require an exact slot returned by availability plus explicit consent; the API independently rejects unavailable slots and same-day duplicates. Add a confirmation nonce/idempotency key before production. | Human confirmation and transaction integrity. |
-| Injects invalid values or fabricated medical details to force a booking. | Typed schemas constrain IDs, dates, temperature, and symptoms; the API repeats validation and no tool output exposes credentials. Add per-user rate limits, audit events, and anomaly alerts for public use. | Input validation, defense in depth, and auditability. |
-
-## Public deployment
-
-Use **Streamable HTTP** behind HTTPS, with an OAuth 2.1/OIDC access-token flow at the HTTP boundary and CityCare JWT/tenant authorization inside every protected tool. Do not use the local `CITYCARE_MCP_JWT` environment fallback outside a single-user development machine; add request rate limits, idempotency keys, audit logs, token rotation, and an allowlisted CORS/reverse-proxy configuration before public access.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

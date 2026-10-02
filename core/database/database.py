@@ -4,7 +4,6 @@ Purpose     : Singleton database connection manager for CityCare Clinic.
               Manages the Motor async client and the ODMantic Engine instance.
 """
 
-import os
 from typing import Optional
 
 from motor.motor_asyncio import AsyncIOMotorClient

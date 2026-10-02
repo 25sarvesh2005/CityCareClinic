@@ -241,7 +241,8 @@ export function ScheduleChatBot() {
                     Schedule AI Assistant
                   </h3>
                   <p className="mt-2 text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                    Ask me anything about daily schedules, doctor rosters, available appointment slots, or patient bookings.
+                    Ask me anything about daily schedules, doctor rosters, available appointment
+                    slots, or patient bookings.
                   </p>
                 </div>
 
@@ -266,9 +267,7 @@ export function ScheduleChatBot() {
                 </div>
               </div>
             ) : (
-              messages.map((msg, idx) => (
-                <ChatMessage key={msg.message_id || idx} message={msg} />
-              ))
+              messages.map((msg, idx) => <ChatMessage key={msg.message_id || idx} message={msg} />)
             )}
 
             {/* Loading Assistant State */}
@@ -328,4 +327,3 @@ export function ScheduleChatBot() {
     </div>
   );
 }
-

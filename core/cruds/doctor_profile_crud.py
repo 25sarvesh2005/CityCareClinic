@@ -28,7 +28,6 @@ from typing import List, Optional
 
 from bson import ObjectId
 from odmantic import AIOEngine
-from pymongo.errors import DuplicateKeyError as PyMongoDuplicateKeyError
 
 from common.logger import get_logger
 from core.models.doctor_profile_model import DoctorProfileModel

@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  backend-tests:
-    name: Backend tests
+  backend-quality:
+    name: Backend Quality & Tests
     runs-on: ubuntu-24.04
     timeout-minutes: 25
 
@@ -51,10 +51,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: pip
@@ -63,14 +63,25 @@ jobs:
       - name: Install backend dependencies
         run: python -m pip install -r requirements-dev.txt
 
-      - name: Run backend tests
+      - name: Verify bytecode compilation
+        run: python -m compileall -q core common chatbot telegram_bot mcp_server cli scripts tests main.py
+
+      - name: Verify backend imports
+        run: |
+          python -c "import main; print('Backend main import OK')"
+          python -c "import mcp_server.server; print('MCP server import OK')"
+
+      - name: Run Ruff linter
+        run: ruff check core common chatbot telegram_bot mcp_server cli scripts tests main.py
+
+      - name: Run backend test suite
         run: python -m pytest -q
 
       - name: Ensure tests did not modify tracked files
         run: git diff --exit-code
 
-  frontend-build:
-    name: Frontend build
+  frontend-quality:
+    name: Frontend Verification & Bundle Build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
@@ -79,17 +90,31 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
           node-version: "24"
           cache: npm
           cache-dependency-path: indigo-glow-app-main/package-lock.json
 
+      - name: Set up Python for audit scripts
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build frontend
+      - name: Verify TypeScript types
+        run: npx tsc --noEmit
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Build production bundle
         run: npm run build
+
+      - name: Run client secret leak audit
+        run: python ../scripts/audit_client_secrets.py

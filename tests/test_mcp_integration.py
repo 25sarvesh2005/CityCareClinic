@@ -1,4 +1,4 @@
-"""End-to-end checks for CityCare's appointment-focused MCP server."""
+"""End-to-end integration checks for CityCare's appointment-focused MCP server."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def _mcp_context(authorization: str) -> SimpleNamespace:
 
 @pytest.mark.asyncio
 async def test_inspector_capabilities_include_tools_resource_and_prompt():
-    """The server exports the three MCP capability types requested for Day 7."""
+    """The server exports the core MCP capability types (tools, resource, prompt)."""
     tools = await citycare_mcp.mcp.get_tools()
     resources = await citycare_mcp.mcp.get_resources()
     prompts = await citycare_mcp.mcp.get_prompts()
@@ -62,7 +62,7 @@ async def test_discovery_wrappers_return_patient_selectable_ids(async_client, bo
 async def test_booking_via_registered_mcp_tool_is_persisted(
     async_client, booking_context, setup_db, monkeypatch
 ):
-    """A booking made by the MCP tool reaches Day-4 API validation and MongoDB."""
+    """A booking made by the MCP tool reaches API validation and MongoDB persistence."""
     patient_email = "mcp.patient@example.com"
     password = "SecurePassword123!"
     signup_response = await async_client.post(

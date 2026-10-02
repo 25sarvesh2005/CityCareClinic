@@ -76,7 +76,7 @@ async def get_available_slots_from_api(
     *,
     client: httpx.AsyncClient | None = None,
 ) -> dict[str, Any]:
-    """Read doctor-specific availability from the existing Day-4 CityCare API."""
+    """Read doctor-specific availability from the CityCare appointment API."""
     return await _citycare_api_request(
         "GET",
         f"/api/v1/hospitals/{hospital_id}/doctors/{doctor_id}/free-slots",

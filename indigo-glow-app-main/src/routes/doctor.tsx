@@ -240,7 +240,11 @@ function DoctorDashboard() {
           </div>
           <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
             <Link to="/schedule-ai">
-              <Button variant="primary" size="sm" className="text-xs gap-1.5 h-9 bg-gradient-to-r from-indigo to-cyan border-none text-white shadow-sm">
+              <Button
+                variant="primary"
+                size="sm"
+                className="text-xs gap-1.5 h-9 bg-gradient-to-r from-indigo to-cyan border-none text-white shadow-sm"
+              >
                 <Sparkles className="size-4 text-cyan-200" />
                 <span>Schedule AI Workspace</span>
               </Button>

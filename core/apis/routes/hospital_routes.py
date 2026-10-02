@@ -32,7 +32,6 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from common.auth import require_super_admin
 from common.tenant_scope import get_hospital_scope
 from core.apis.schemas.admin_schema import HospitalStatsResponse
 from core.apis.schemas.hospital_schema import (

@@ -3,22 +3,19 @@
  * Base URL defaults to http://localhost:8000/api/v1
  */
 
+import {
+  DEFAULT_API_BASE_URL,
+  SYMPTOMS,
+  SYMPTOM_LABELS,
+  type Symptom,
+  type Role,
+  type AppointmentStatus,
+} from "./constants";
+
+export { SYMPTOMS, SYMPTOM_LABELS, type Symptom, type Role, type AppointmentStatus };
+
 export const API_BASE_URL =
-  (import.meta.env["VITE_API_BASE_URL"] as string | undefined) ?? "http://localhost:8000/api/v1";
-
-export const SYMPTOMS = ["fever", "cough", "cold", "bodyache", "headache", "other"] as const;
-export type Symptom = (typeof SYMPTOMS)[number];
-
-export const SYMPTOM_LABELS: Record<Symptom, string> = {
-  fever: "Fever",
-  cough: "Cough",
-  cold: "Cold",
-  bodyache: "Body Ache",
-  headache: "Headache",
-  other: "Other",
-};
-
-export type Role = "patient" | "doctor" | "hospital_owner" | "super_admin";
+  (import.meta.env["VITE_API_BASE_URL"] as string | undefined) ?? DEFAULT_API_BASE_URL;
 
 export type DoctorInfo = {
   doctor_name: string;

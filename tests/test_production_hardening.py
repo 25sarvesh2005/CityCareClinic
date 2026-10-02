@@ -19,9 +19,7 @@ import pytest
 
 from common.config import (
     get_app_env,
-    get_cors_origins,
     get_jwt_expire_minutes,
-    get_jwt_secret,
     parse_and_validate_cors_origin,
     should_seed_demo_users,
     validate_app_env,

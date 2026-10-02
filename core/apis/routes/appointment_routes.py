@@ -5,7 +5,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from common.auth import decodeJWT, get_current_user, oauth2_scheme
+from common.auth import decodeJWT, oauth2_scheme
 from core.apis.schemas.appointment_schema import (
     AppointmentResponse,
     BookAppointmentRequest,

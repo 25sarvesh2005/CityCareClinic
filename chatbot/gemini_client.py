@@ -6,9 +6,8 @@ and manages the multi-turn tool execution loop.
 """
 
 from datetime import date
-import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 from odmantic import AIOEngine
 
 from google import genai

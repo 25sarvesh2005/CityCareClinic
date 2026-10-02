@@ -152,8 +152,7 @@ function PatientDashboard() {
       setTelegramCommandCopied(false);
       toast.success("Telegram link code created", "It expires in 10 minutes and works once.");
     },
-    onError: (err) =>
-      toast.error("Couldn't create Telegram link", (err as ApiError).message),
+    onError: (err) => toast.error("Couldn't create Telegram link", (err as ApiError).message),
   });
 
   async function copyTelegramCommand() {
@@ -194,7 +193,11 @@ function PatientDashboard() {
           </div>
           <div className="flex items-center gap-3">
             <Link to="/prescription-ai">
-              <Button variant="primary" size="sm" className="bg-gradient-to-r from-cyan to-indigo text-white shadow-sm border-none gap-1.5">
+              <Button
+                variant="primary"
+                size="sm"
+                className="bg-gradient-to-r from-cyan to-indigo text-white shadow-sm border-none gap-1.5"
+              >
                 <Sparkles className="size-4 text-cyan-200" /> Prescription AI Workspace
               </Button>
             </Link>
@@ -372,7 +375,9 @@ function PatientDashboard() {
                     <ShieldCheck className="size-5" />
                   </span>
                   <div>
-                    <h3 className="text-sm font-bold text-foreground">Connect this patient account</h3>
+                    <h3 className="text-sm font-bold text-foreground">
+                      Connect this patient account
+                    </h3>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
                       Generate a single-use code, then send the resulting command in a private chat
                       with the CityCare Telegram bot. Never send your web password to the bot.
@@ -392,7 +397,8 @@ function PatientDashboard() {
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-[11px] text-muted-foreground">
-                        Expires in {Math.round(telegramLink.expires_in_seconds / 60)} minutes · works once
+                        Expires in {Math.round(telegramLink.expires_in_seconds / 60)} minutes ·
+                        works once
                       </p>
                       <Button variant="outline" size="sm" onClick={copyTelegramCommand}>
                         {telegramCommandCopied ? (

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { clearToken, setToken, type Role } from "./api";
+import { STORAGE_KEYS } from "./constants";
 
-const ROLE_KEY = "citycare_role";
-const NAME_KEY = "citycare_name";
-const EMAIL_KEY = "citycare_email";
+const ROLE_KEY = STORAGE_KEYS.ROLE;
+const NAME_KEY = STORAGE_KEYS.NAME;
+const EMAIL_KEY = STORAGE_KEYS.EMAIL;
 
 export type SessionUser = {
   name: string;

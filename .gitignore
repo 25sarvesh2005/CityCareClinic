@@ -21,3 +21,7 @@ indigo-glow-app-main/node_modules/
 indigo-glow-app-main/.output/
 indigo-glow-app-main/.tanstack/
 indigo-glow-app-main/.wrangler/
+indigo-glow-app-main/.lovable/
+
+# Temporary files
+tmp/

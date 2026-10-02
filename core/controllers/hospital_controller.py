@@ -47,7 +47,6 @@ from core.constants import UserRole
 from core.cruds.doctor_profile_crud import (
     create_doctor_profile,
     find_profile_by_id,
-    find_profile_by_user_and_hospital,
     find_profiles_by_hospital,
     set_doctor_profile_active,
 )

@@ -7,12 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from chatbot.prescription_assistant import (
-    EMERGENCY_RESPONSE,
-    MEDICAL_ADVICE_RESPONSE,
-    PrescriptionAnswer,
     answer_question,
-    is_emergency_message,
-    is_medical_advice_request,
 )
 
 

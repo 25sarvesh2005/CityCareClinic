@@ -237,7 +237,8 @@ export function PatientPrescriptionChatBot() {
                     Ask About Your Prescriptions
                   </h3>
                   <p className="mt-2 text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                    I can explain documented medicines, dosage, timing, doctor instructions, and follow-up dates from your CityCare records.
+                    I can explain documented medicines, dosage, timing, doctor instructions, and
+                    follow-up dates from your CityCare records.
                   </p>
                 </div>
 
@@ -262,9 +263,7 @@ export function PatientPrescriptionChatBot() {
                 </div>
               </div>
             ) : (
-              messages.map((msg, idx) => (
-                <ChatMessage key={msg.message_id || idx} message={msg} />
-              ))
+              messages.map((msg, idx) => <ChatMessage key={msg.message_id || idx} message={msg} />)
             )}
 
             {/* Loading Assistant State */}

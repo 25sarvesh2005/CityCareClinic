@@ -10,8 +10,9 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
+import { reportClientError } from "../lib/error-reporting";
 import { ToastProvider } from "../components/Toaster";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 
 function NotFoundComponent() {
   return (
@@ -39,7 +40,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    reportClientError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
   return (
@@ -135,8 +136,10 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
+        <ErrorBoundary>
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+        </ErrorBoundary>
       </ToastProvider>
     </QueryClientProvider>
   );

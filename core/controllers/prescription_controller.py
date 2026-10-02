@@ -9,7 +9,6 @@ Used By:
 """
 
 from typing import List, Optional
-from bson import ObjectId
 from fastapi import HTTPException, status
 
 from common.logger import get_logger
@@ -29,7 +28,6 @@ from core.cruds.prescription_crud import (
     find_prescriptions_by_patient,
 )
 from core.database.database import get_engine
-from core.models.appointment_model import AppointmentModel
 from core.models.prescription_model import PrescriptionModel
 from core.services.cloudinary_service import upload_prescription_pdf
 from core.services.pdf_service import generate_prescription_pdf

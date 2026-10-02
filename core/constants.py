@@ -3,12 +3,6 @@
 File        : core/constants.py
 Purpose     : Single source of truth for all enums, clinic configuration,
               and slot utility functions.
-
-Replaces:
-    - core/enums/role_enum.py
-    - core/enums/symptom_enum.py
-    - core/constants/clinic_constants.py
-    - core/utils/slot_utils.py
 ─────────────────────────────────────────────────────────────────────────────
 """
 

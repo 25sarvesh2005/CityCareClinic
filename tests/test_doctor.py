@@ -55,7 +55,7 @@ async def test_doctor_schedule_unauthorized_patient(async_client):
         json={"email": "patient1@example.com", "password": "Password123!"},
     )
     patient_token = login_res.json()["access_token"]
-    
+
     today_str = date.today().isoformat()
     response = await async_client.get(
         f"/api/v1/doctor/schedule?date={today_str}",
@@ -78,7 +78,7 @@ async def test_doctor_schedule_authorized(async_client):
     )
     assert login_res.status_code == 200
     doctor_token = login_res.json()["access_token"]
-    
+
     today_str = date.today().isoformat()
     response = await async_client.get(
         f"/api/v1/doctor/schedule?date={today_str}",
@@ -99,7 +99,7 @@ async def test_doctor_stats_authorized(async_client):
     )
     assert login_res.status_code == 200
     doctor_token = login_res.json()["access_token"]
-    
+
     response = await async_client.get(
         "/api/v1/doctor/stats",
         headers={"Authorization": f"Bearer {doctor_token}"},

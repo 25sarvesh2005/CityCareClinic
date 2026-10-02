@@ -28,7 +28,6 @@ Raises:
 ─────────────────────────────────────────────────────────────────────────────
 """
 
-from datetime import date, datetime, timezone
 from typing import List, Optional
 
 from bson import ObjectId

@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from common.auth import decodeJWT, decode_jwt, oauth2_scheme
+from common.auth import decodeJWT, oauth2_scheme
 from core.apis.schemas.doctor_schema import (
     DoctorScheduleResponse,
     DoctorStatsResponse,

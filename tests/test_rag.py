@@ -6,7 +6,7 @@ import os
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from chatbot.rag_service import DEFAULT_PDF_PATH, ingest_pdf, search_handbook
+from chatbot.rag_service import DEFAULT_PDF_PATH, search_handbook
 from chatbot.tools import execute_tool_call
 
 

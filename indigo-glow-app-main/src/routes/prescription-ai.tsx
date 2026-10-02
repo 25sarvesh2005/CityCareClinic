@@ -7,7 +7,10 @@ export const Route = createFileRoute("/prescription-ai")({
   head: () => ({
     meta: [
       { title: "Prescription AI Workspace — CityCare Clinic" },
-      { name: "description", content: "Intelligent full-window prescription assistant with Gemini medical AI." },
+      {
+        name: "description",
+        content: "Intelligent full-window prescription assistant with Gemini medical AI.",
+      },
       { property: "og:title", content: "Prescription AI Workspace — CityCare Clinic" },
       {
         property: "og:description",

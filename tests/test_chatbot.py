@@ -10,7 +10,6 @@ Covering:
 """
 
 import pytest
-import pytest_asyncio
 from bson import ObjectId
 
 from chatbot.gemini_client import (
@@ -19,11 +18,10 @@ from chatbot.gemini_client import (
     run_chat_completion,
 )
 from chatbot.tools import execute_tool_call
-from common.auth import create_access_token, hash_password
+from common.auth import hash_password
 from core.constants import UserRole
 from core.models.appointment_model import AppointmentModel
 from core.models.doctor_profile_model import DoctorProfileModel
-from core.models.hospital_model import HospitalModel
 from core.models.prescription_model import PrescriptionModel
 from core.models.user_model import UserModel
 
@@ -274,8 +272,6 @@ async def test_hospital_owner_tool_call_different_hospital_doctor_rejected(setup
 @pytest.mark.asyncio
 async def test_chat_schedule_endpoint_and_sessions(async_client, booking_context):
     """Test POST /v1/chat/schedule, GET /v1/chat/schedule/sessions, and GET session history."""
-    hospital_id = booking_context["hospital_id"]
-    doctor_profile_id = booking_context["doctor_id"]
 
     # Log in as doctor created in booking_context
     doc_login = await async_client.post(
@@ -523,7 +519,7 @@ async def test_gemini_model_fallback_on_quota_error(monkeypatch, setup_db):
             attempted_models.append(model)
             if model == "gemini-3.6-flash":
                 raise RuntimeError("429 RESOURCE_EXHAUSTED: Quota exceeded for gemini-3.6-flash")
-            
+
             # Fallback model succeeds
             class Candidate:
                 content = "Fallback success content"

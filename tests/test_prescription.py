@@ -10,7 +10,6 @@ Purpose     : Automated pytest suite verifying doctor request acceptance flow,
 from datetime import date, timedelta
 import pytest
 
-from core.constants import DOCTOR_INFO
 from core.models.prescription_model import PrescriptionModel
 
 

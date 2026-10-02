@@ -109,7 +109,11 @@ function DashboardContent() {
         </div>
         <div className="flex items-center gap-3">
           <Link to="/schedule-ai">
-            <Button variant="primary" size="sm" className="bg-gradient-to-r from-indigo to-cyan text-white shadow-sm border-none gap-1.5">
+            <Button
+              variant="primary"
+              size="sm"
+              className="bg-gradient-to-r from-indigo to-cyan text-white shadow-sm border-none gap-1.5"
+            >
               <Sparkles className="size-4 text-cyan-200" /> Schedule AI Workspace
             </Button>
           </Link>

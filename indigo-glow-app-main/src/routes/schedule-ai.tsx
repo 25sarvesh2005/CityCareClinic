@@ -7,7 +7,10 @@ export const Route = createFileRoute("/schedule-ai")({
   head: () => ({
     meta: [
       { title: "Schedule AI Workspace — CityCare Clinic" },
-      { name: "description", content: "Intelligent full-window schedule assistant with Gemini function calling." },
+      {
+        name: "description",
+        content: "Intelligent full-window schedule assistant with Gemini function calling.",
+      },
       { property: "og:title", content: "Schedule AI Workspace — CityCare Clinic" },
       {
         property: "og:description",

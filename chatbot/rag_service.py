@@ -6,7 +6,7 @@ and vector similarity search against ChromaDB (with MongoDB Atlas fallback suppo
 """
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from common.logger import get_logger
 
 logger = get_logger(__name__)

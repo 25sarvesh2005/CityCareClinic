@@ -1,58 +1,78 @@
-# Aurora Design Suite
+# CityCare Clinic — Web Client
 
-🎨 Design System
+A modern, responsive healthcare consultation and clinic management web application built with React 19, TypeScript, TanStack Start, and TailwindCSS.
 
-Dark mode first — #0a0a0f background, indigo + cyan accent palette
+---
 
-Glassmorphism cards with backdrop-filter: blur(16px) and subtle glow shadows
+## Features
 
-Inter font from Google Fonts
+- **Patient Portal**:
+  - Doctor discovery, profiles, consultation fee details, and clinic hours.
+  - Interactive appointment booking with real-time slot availability.
+  - Multi-select symptom logging and dual-scale temperature input (°F / °C) with automated range validation.
+  - AI-assisted schedule query assistant and prescription assistant.
+  - Telegram integration with one-time verification code generation.
+- **Doctor Portal**:
+  - Daily appointment roster view with patient symptom details and vital signs.
+  - Appointment acceptance, rejection, and clinical status workflow.
+  - Digital prescription generation and consultation history.
+- **Hospital Owner & Super Admin Dashboards**:
+  - Multi-tenant clinic management and doctor staff rostering.
+  - Platform-wide clinic onboarding and owner administration.
 
-Micro-animations: hover lift, button press, fade-in on mount
+---
 
-📄 4 Pages Built to Your Backend
+## Technology Stack
 
-PageRouteAuthLanding (hero + doctor info card)/PublicLogin / Signup/login, /signupPublicPatient Dashboard/dashboardrole: patientDoctor Dashboard/doctorrole: doctor
+- **Framework**: [TanStack Start](https://tanstack.com/start) with [TanStack Router](https://tanstack.com/router)
+- **UI Library**: React 19, [Radix UI](https://www.radix-ui.com/) primitives
+- **Styling**: TailwindCSS, CSS Variables theme system
+- **State & Data Fetching**: TanStack Query (React Query)
+- **Icons**: Lucide React
 
-🔌 All 9 API Endpoints Mapped
+---
 
-Every endpoint has exact request bodies, response shapes, and error handling instructions (409 slot clash, 401 wrong creds, 422 validation, 403 role guard, etc.)
+## Getting Started
 
-⚡ UX Details
+### Prerequisites
 
-Slot picker grouped into 🌅 Morning / 🌆 Evening
+- Node.js 20+ (LTS recommended)
+- npm 10+
+- CityCare Clinic FastAPI backend running at `http://localhost:8000`
 
-Symptom multi-select toggles (exactly your 6 enums)
+### Installation
 
-Temperature input supports °F or °C; Celsius is converted to the API's existing
-95.0–110.0°F storage contract before booking
+```bash
+# Install dependencies
+npm ci
+```
 
-Cancel with confirmation modal (soft delete awareness)
+### Development Server
 
-Custom toast system (not alert())
-
-Skeleton loaders on all fetch states
-
-Route guards based on role from localStorage
-create this i have shared an image i want similar implementation
-
-This project was built with [Lovable](https://lovable.dev).
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/dbbfc72e-eb0f-414c-9b00-4a37d941472a).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+```bash
+# Start local development server on http://localhost:5173
 npm run dev
+```
+
+### Production Build
+
+```bash
+# Run TypeScript type check
+npx tsc --noEmit
+
+# Run ESLint validation
+npm run lint
+
+# Build production bundle
+npm run build
+```
+
+---
+
+## Environment Configuration
+
+Create a `.env` file in the frontend root or rely on default development fallbacks:
+
+```env
+VITE_API_BASE_URL=http://localhost:8000/api/v1
 ```
