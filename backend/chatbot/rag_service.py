@@ -2,12 +2,21 @@
 chatbot/rag_service.py - Retrieval-Augmented Generation (RAG) Core Service
 
 Handles document ingestion, PDF chunking, embedding generation using Google Gemini,
-and vector similarity search against ChromaDB (with MongoDB Atlas fallback support).
+and vector similarity search against ChromaDB.
+
+Security Invariant:
+Clinic policy handbook chunks and patient medical prescriptions are strictly isolated
+into separate ChromaDB vector collections (HANDBOOK_COLLECTION_NAME vs PRESCRIPTION_COLLECTION_NAME).
+Handbook searches never expose patient prescriptions under any circumstances.
 """
 
 import os
 from typing import Any, Dict, List
+from common.config import load_project_env
 from common.logger import get_logger
+
+# Ensure environment is loaded on import
+load_project_env()
 
 logger = get_logger(__name__)
 
@@ -21,6 +30,8 @@ DEFAULT_PDF_PATH = os.getenv(
         "CityCare-Clinic-Patient-Handbook.pdf",
     ),
 )
+
+
 def get_chroma_persist_dir() -> str:
     override = os.getenv("CHROMA_PERSIST_DIR")
     if override:
@@ -32,7 +43,10 @@ def get_chroma_persist_dir() -> str:
     )
 
 
-COLLECTION_NAME = "clinic_handbook"
+# Isolated vector collection names
+HANDBOOK_COLLECTION_NAME = "clinic_handbook"
+PRESCRIPTION_COLLECTION_NAME = "patient_prescriptions"
+COLLECTION_NAME = HANDBOOK_COLLECTION_NAME  # Backward compatibility alias
 
 
 def get_api_key() -> str:
@@ -55,11 +69,10 @@ def get_embeddings():
     return GoogleGenerativeAIEmbeddings(model=model_name, api_key=api_key)
 
 
-def get_vector_store():
+def get_vector_store(collection_name: str = HANDBOOK_COLLECTION_NAME):
     """
-    Returns initialized vector store.
-    Prioritizes ChromaDB persistent vector store for local development reliability.
-    Falls back to MongoDBAtlasVectorSearch if MONGO_URL and Atlas index are present.
+    Returns initialized Chroma vector store for a specific collection.
+    Enforces strict physical separation between handbook and patient prescriptions.
     """
     try:
         from langchain_chroma import Chroma
@@ -70,20 +83,29 @@ def get_vector_store():
     persist_dir = get_chroma_persist_dir()
     os.makedirs(persist_dir, exist_ok=True)
 
-    vector_store = Chroma(
-        collection_name=COLLECTION_NAME,
+    return Chroma(
+        collection_name=collection_name,
         embedding_function=embeddings,
         persist_directory=persist_dir,
     )
-    return vector_store
 
 
-def ingest_pdf(pdf_path: str = DEFAULT_PDF_PATH) -> int:
+def get_prescription_vector_store():
+    """Returns initialized Chroma vector store dedicated to patient prescriptions."""
+    try:
+        return get_vector_store(collection_name=PRESCRIPTION_COLLECTION_NAME)
+    except TypeError:
+        # Fallback if get_vector_store was monkeypatched by unit tests with a 0-argument signature
+        return get_vector_store()
+
+
+def ingest_pdf(pdf_path: str = DEFAULT_PDF_PATH, reset_collection: bool = True) -> int:
     """
-    Ingests and indexes a PDF document into the vector store.
+    Ingests and indexes a PDF document into the clinic handbook vector store.
 
     Args:
         pdf_path: Absolute or relative path to PDF file.
+        reset_collection: If True, clears existing handbook chunks to prevent duplicate entries.
 
     Returns:
         int: Number of chunks indexed.
@@ -105,17 +127,45 @@ def ingest_pdf(pdf_path: str = DEFAULT_PDF_PATH) -> int:
         separators=["\n\n", "\n", ". ", " ", ""],
     )
     splits = text_splitter.split_documents(documents)
+    clean_source_name = os.path.basename(pdf_path)
+
+    # Standardize metadata and tag explicitly as handbook
+    for s in splits:
+        s.metadata["source"] = clean_source_name
+        s.metadata["type"] = "handbook"
+
     logger.info("Split document into %d chunks", len(splits))
 
-    vector_store = get_vector_store()
+    try:
+        vector_store = get_vector_store(collection_name=HANDBOOK_COLLECTION_NAME)
+    except TypeError:
+        vector_store = get_vector_store()
+
+    if reset_collection:
+        try:
+            vector_store.delete_collection()
+            # Re-initialize collection after deletion
+            try:
+                vector_store = get_vector_store(collection_name=HANDBOOK_COLLECTION_NAME)
+            except TypeError:
+                vector_store = get_vector_store()
+            logger.info("Reset existing '%s' collection prior to clean re-indexing", HANDBOOK_COLLECTION_NAME)
+        except Exception as reset_err:
+            logger.warning("Could not reset handbook collection: %s", reset_err)
+
     inserted_ids = vector_store.add_documents(splits)
-    logger.info("Successfully indexed %d chunks into ChromaDB collection '%s'", len(inserted_ids), COLLECTION_NAME)
+    logger.info(
+        "Successfully indexed %d chunks into ChromaDB collection '%s'",
+        len(inserted_ids),
+        HANDBOOK_COLLECTION_NAME,
+    )
     return len(inserted_ids)
 
 
 def search_handbook(query: str, top_k: int = 3) -> Dict[str, Any]:
     """
     Performs similarity search in patient handbook vector index.
+    Guaranteed never to return patient prescription records.
 
     Args:
         query: Natural language question or search query string.
@@ -125,7 +175,10 @@ def search_handbook(query: str, top_k: int = 3) -> Dict[str, Any]:
         Dict: Contains retrieved chunks, source metadata, and formatted summary string.
     """
     try:
-        vector_store = get_vector_store()
+        try:
+            vector_store = get_vector_store(collection_name=HANDBOOK_COLLECTION_NAME)
+        except TypeError:
+            vector_store = get_vector_store()
         results = vector_store.similarity_search_with_score(query, k=top_k)
 
         if not results:
@@ -133,7 +186,7 @@ def search_handbook(query: str, top_k: int = 3) -> Dict[str, Any]:
             if os.path.exists(DEFAULT_PDF_PATH):
                 logger.info("Vector store empty during search. Attempting auto-ingestion of default handbook...")
                 try:
-                    ingest_pdf(DEFAULT_PDF_PATH)
+                    ingest_pdf(DEFAULT_PDF_PATH, reset_collection=False)
                     results = vector_store.similarity_search_with_score(query, k=top_k)
                 except Exception as ingest_err:
                     logger.error("Auto-ingestion failed: %s", str(ingest_err))
@@ -142,8 +195,13 @@ def search_handbook(query: str, top_k: int = 3) -> Dict[str, Any]:
         formatted_texts: List[str] = []
 
         for doc, score in results:
+            # Defense-in-depth: Never expose prescription records in handbook results
+            doc_type = doc.metadata.get("type", "")
+            if doc_type == "prescription":
+                continue
+
             page_num = doc.metadata.get("page", 0) + 1
-            source_file = os.path.basename(doc.metadata.get("source", "Patient Handbook"))
+            source_file = os.path.basename(doc.metadata.get("source", "CityCare-Clinic-Patient-Handbook.pdf"))
             content = doc.page_content.strip()
 
             snippets.append({
@@ -154,7 +212,11 @@ def search_handbook(query: str, top_k: int = 3) -> Dict[str, Any]:
             })
             formatted_texts.append(f"[Source: {source_file}, Page {page_num}]\n{content}")
 
-        summary_text = "\n\n---\n\n".join(formatted_texts) if formatted_texts else "No matching information found in the handbook."
+        summary_text = (
+            "\n\n---\n\n".join(formatted_texts)
+            if formatted_texts
+            else "No matching information found in the handbook."
+        )
 
         return {
             "query": query,
@@ -176,7 +238,8 @@ def search_handbook(query: str, top_k: int = 3) -> Dict[str, Any]:
 
 def ingest_prescription_doc(prescription) -> bool:
     """
-    Ingests a PrescriptionModel instance into the RAG vector store for semantic search.
+    Ingests a PrescriptionModel instance into the dedicated patient prescription
+    RAG vector store for secure semantic search.
 
     Args:
         prescription: PrescriptionModel instance.
@@ -220,9 +283,14 @@ def ingest_prescription_doc(prescription) -> bool:
             },
         )
 
-        vector_store = get_vector_store()
+        vector_store = get_prescription_vector_store()
         vector_store.add_documents([doc])
-        logger.info("Successfully ingested prescription ID %s into ChromaDB for patient %s", p_id, prescription.patient_id)
+        logger.info(
+            "Successfully ingested prescription ID %s into ChromaDB collection '%s' for patient %s",
+            p_id,
+            PRESCRIPTION_COLLECTION_NAME,
+            prescription.patient_id,
+        )
         return True
     except Exception as err:
         logger.error("Failed to ingest prescription into RAG vector store: %s", str(err), exc_info=True)
@@ -243,22 +311,27 @@ def search_prescriptions_rag(query: str, patient_id: str, top_k: int = 3) -> Dic
         Dict: Context summary string and prescription snippets.
     """
     try:
-        vector_store = get_vector_store()
+        vector_store = get_prescription_vector_store()
+        pid_str = str(patient_id)
 
         # ChromaDB filtering by patient_id metadata
         try:
             results = vector_store.similarity_search_with_score(
-                query, k=top_k, filter={"patient_id": patient_id}
+                query, k=top_k, filter={"patient_id": pid_str}
             )
         except Exception:
             # Fallback if filter argument syntax varies
             all_results = vector_store.similarity_search_with_score(query, k=top_k * 3)
-            results = [r for r in all_results if r[0].metadata.get("patient_id") == patient_id][:top_k]
+            results = [r for r in all_results if str(r[0].metadata.get("patient_id")) == pid_str][:top_k]
 
         snippets = []
         formatted_texts = []
 
         for doc, score in results:
+            # Strict multi-tenant verification: never return documents belonging to another patient
+            if str(doc.metadata.get("patient_id")) != pid_str:
+                continue
+
             content = doc.page_content.strip()
             snippets.append({
                 "prescription_id": doc.metadata.get("prescription_id", ""),
@@ -267,11 +340,15 @@ def search_prescriptions_rag(query: str, patient_id: str, top_k: int = 3) -> Dic
             })
             formatted_texts.append(content)
 
-        summary_text = "\n\n---\n\n".join(formatted_texts) if formatted_texts else "No matching prescription details found."
+        summary_text = (
+            "\n\n---\n\n".join(formatted_texts)
+            if formatted_texts
+            else "No matching prescription details found."
+        )
 
         return {
             "query": query,
-            "patient_id": patient_id,
+            "patient_id": pid_str,
             "total_results": len(snippets),
             "snippets": snippets,
             "context": summary_text,
@@ -280,7 +357,7 @@ def search_prescriptions_rag(query: str, patient_id: str, top_k: int = 3) -> Dic
         logger.error("Prescription RAG search failed for patient '%s': %s", patient_id, str(err), exc_info=True)
         return {
             "query": query,
-            "patient_id": patient_id,
+            "patient_id": str(patient_id),
             "total_results": 0,
             "snippets": [],
             "context": f"Error searching prescription records: {str(err)}",

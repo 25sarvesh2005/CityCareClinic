@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from chatbot.rag_service import search_prescriptions_rag
+from common.config import load_project_env
+
+load_project_env()
 
 
 EMERGENCY_RESPONSE = (

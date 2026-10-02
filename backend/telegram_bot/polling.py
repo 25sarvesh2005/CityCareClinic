@@ -2,10 +2,8 @@
 
 import asyncio
 import os
-from pathlib import Path
 
 import httpx
-from dotenv import load_dotenv
 
 from core.database.database import close_database_connection, connect_to_database, get_engine
 from telegram_bot.client import TelegramClient
@@ -13,8 +11,9 @@ from telegram_bot.cruds import mark_update_attempt
 from telegram_bot.gateway import TelegramGateway
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-load_dotenv(PROJECT_ROOT / ".env")
+from common.config import load_project_env
+
+load_project_env()
 
 
 async def run() -> None:

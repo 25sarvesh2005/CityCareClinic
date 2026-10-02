@@ -5,9 +5,20 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
 
 import httpx
-from dotenv import load_dotenv
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+BACKEND_DIR = PROJECT_ROOT / "backend"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from common.config import load_project_env
+
+load_project_env()
 
 COMMANDS = [
     {"command": "start", "description": "Open the patient assistant"},
@@ -28,7 +39,6 @@ SECRET_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,256}$")
 
 def main() -> int:
     """Call Telegram configuration methods without printing secret credentials."""
-    load_dotenv()
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=("set", "delete", "info"))
     parser.add_argument("--url", default=os.getenv("TELEGRAM_PUBLIC_WEBHOOK_URL", ""))

@@ -2,18 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from chatbot.prescription_assistant import answer_question
+from common.config import load_project_env
 
-from dotenv import load_dotenv
-
-from chatbot.prescription_assistant import (
-    answer_question,
-)
-
-
-# The FastAPI application loads this file during startup. The CLI runs outside
-# that lifecycle, so it loads the same project-level configuration explicitly.
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+load_project_env()
 
 
 def run_repl(patient_id: str, top_k: int = 3) -> None:

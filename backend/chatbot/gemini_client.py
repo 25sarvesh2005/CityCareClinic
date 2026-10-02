@@ -14,7 +14,11 @@ from google import genai
 from google.genai import types
 
 from chatbot.tools import execute_tool_call
+from common.config import load_project_env
 from common.logger import get_logger
+
+# Ensure environment is loaded on import
+load_project_env()
 
 logger = get_logger(__name__)
 
@@ -31,10 +35,10 @@ GEMINI_NOT_CONFIGURED_RESPONSE = (
 
 
 def get_gemini_client() -> genai.Client:
-    """Initialize and return google-genai Client using GEMINI_API_KEY."""
-    api_key = os.environ.get("GEMINI_API_KEY")
+    """Initialize and return google-genai Client using GEMINI_API_KEY or GOOGLE_API_KEY."""
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
-        logger.warning("GEMINI_API_KEY not found in environment")
+        logger.warning("Neither GEMINI_API_KEY nor GOOGLE_API_KEY found in environment")
     return genai.Client(api_key=api_key)
 
 
@@ -195,7 +199,7 @@ async def run_chat_completion(
     Returns:
         str: Final natural language response text from assistant.
     """
-    if not os.environ.get("GEMINI_API_KEY"):
+    if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
         logger.warning("Schedule assistant cannot run because GEMINI_API_KEY is missing")
         return GEMINI_NOT_CONFIGURED_RESPONSE
 
